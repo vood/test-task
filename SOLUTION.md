@@ -1,180 +1,47 @@
 # Solution
 
-## Problem Framing
+## Problem
 
-The assignment is intentionally ambiguous. I treated it less as "build a chatbot over documents" and more as a small version of a company-context system: a business user should be able to ask a question, get a useful answer, understand where the answer came from, and not need to know how the underlying agent works.
+The homework is intentionally ambiguous. I interpreted it as a small company-context product, not just a document chatbot.
 
-The core problem statements are:
+The core problems are:
 
-1. **Company knowledge is scattered.** Facts live across interviews, updates, dashboards, org notes, and documents with different dates and levels of authority.
-2. **Retrieval alone is not enough.** The hard cases are entity resolution, stale claims, contradictory sources, regional scope, aliases, and causal chains.
-3. **Answers need provenance.** A useful answer must cite original documents so the user can inspect evidence and audit the reasoning.
-4. **The system must stay generic.** The agent rules should not be rewritten for every company or fixture. Company-specific interpretation should live in data and normalization outputs.
-5. **Users need continuity.** Multi-turn chat, persisted history, and durable clarifications matter because business questions rarely fit into one prompt.
+1. Company knowledge is scattered across interviews, updates, dashboards, org notes, emails, and files.
+2. Retrieval alone is not enough. The difficult cases are entity resolution, stale claims, conflicting sources, regional scope, aliases, and causal chains.
+3. Answers need provenance. A business user should see which original documents support the answer.
+4. The system should stay generic. Company-specific interpretation should live in data and pipeline outputs, not in a constantly edited prompt.
+5. Users need continuity through multi-turn chat, persisted history, and durable clarifications.
 
-## Non-Goals And Scope
+## Non-Goals
 
-This take-home is not trying to build:
+This version is not a full enterprise data platform, permission system, connector suite, custom vector database, or production credential broker.
 
-- a full enterprise data platform
-- a complete permissions and audit product
-- a custom vector database or ranking engine
-- a finished ingestion pipeline for every file type
-- a production-grade multi-tenant credential broker
-- a replacement for the agent harness
-
-The scope is the smallest working product slice that proves the architecture:
+The goal is the smallest working slice that proves the architecture:
 
 - authenticated chat UI
 - persisted conversations
-- agent execution in an isolated hosted environment
+- hosted isolated agent execution
 - filesystem-shaped company workspace
 - normalized records for entity/freshness/conflict reasoning
 - original-document citations
 - source preview
 - regression checks for ambiguous company questions
 
-## How This Solution Addresses It
+## Production Architecture
 
-The solution keeps the runtime generic and moves company-specific interpretation into data.
+There are three main product areas.
 
-`AGENTS.md` defines reusable operating rules: inspect company records, resolve entities before answering, prefer normalized records for interpretation, cite original documents only, ask for clarification when ambiguity matters, and keep answers readable for business users.
+### 1. Chat Experience
 
-`data/normalized/` represents the output of a future normalization pipeline. It is the preferred layer for aliases, entity identities, conflicts, stale facts, and causal chains. It guides reasoning, but it does not appear as a user-facing source. The final answer cites original records under `data/`.
+Chat is mostly a solved problem. A production product should reuse off-the-shelf components for message rendering, streaming, history, auth, attachments, and mobile behavior.
 
-The query path uses the existing agent harness over a POSIX-style workspace instead of rebuilding retrieval, planning, source inspection, and code execution in application code. That makes the system simple now and lets it improve as the underlying models and harness improve.
+The custom UI should focus on product-specific needs: source inspection, clarification review, workspace controls, and trust signals.
 
-## Ideal Production System
+### 2. Data Sync And Permissions
 
-In production I see three core parts:
+This is one of the hard parts. The system needs connectors, file sync, source metadata, freshness tracking, deletion handling, access control, and audit logs.
 
-1. **Chat and user experience.** This is mostly a solved problem. The product should reuse off-the-shelf chat UI, auth, streaming, persistence, file preview, and conversation components where possible. The differentiator is not a custom chat box; it is the quality, trust, and controllability of answers over company data.
-2. **Data sync and permissions.** This is a hard product problem. The system needs reliable connectors, file sync, metadata capture, source freshness, deletion handling, access control, and auditability.
-3. **Indexing, search, and reasoning.** The system needs to decide what to retrieve, how to resolve entities, how to handle stale or conflicting facts, and when to ask the user for clarification.
-
-The production version should look like this:
-
-```text
-Customer sources
-  -> connectors and file sync
-  -> remote POSIX-compatible workspace
-  -> ingestion and normalization pipelines
-  -> original records + normalized interpretation records + provenance graph
-  -> isolated agent session with scoped filesystem permissions
-  -> sourced business answer
-  -> durable chat, clarification, audit, and feedback records
-```
-
-Key production components:
-
-- **Chat shell:** use existing chat components and SDK patterns for message rendering, streaming, history, attachments, and mobile behavior. Build custom UI only where the product needs source inspection, clarification review, or workspace controls.
-- **Remote workspace:** a POSIX-compatible mount backed by object storage or a remote filesystem. Users and connectors can add files without redeploying the app.
-- **Ingestion pipeline:** extracts text from PDFs, docs, email exports, spreadsheets, dashboards, and OCR sources while preserving metadata such as created time, modified time, owner, source system, and permissions.
-- **Normalization pipeline:** writes durable records for entities, aliases, relationships, freshness, conflicts, causal chains, and unresolved ambiguities.
-- **Provenance graph:** every normalized record points back to original documents and extraction spans where possible.
-- **Scoped execution:** each agent run gets only the workspace and permissions it needs. Generated artifacts go to a writable scratch area, not source data.
-- **Clarification loop:** when the evidence is ambiguous, the user can clarify; accepted clarifications are persisted as workspace records instead of hidden chat memory.
-- **Evaluation loop:** regression questions test entity ambiguity, stale data, conflicting metrics, source citations, and non-technical answer quality.
-- **Controls:** authentication, workspace-level authorization, audit logs, retention, rate limits, and per-customer credential handling.
-
-The important design point is that the query interface stays filesystem-native. Blob storage, sync tools, and filesystem abstractions are well understood and scalable. Tools like `rclone`, object stores, mounted volumes, and POSIX-compatible APIs already solve large parts of durable file movement. By keeping the agent contract as "inspect this workspace", the storage backend, normalization quality, permissions, and source connectors can mature independently without changing how the agent reasons over data.
-
-## Search And Indexing Strategy
-
-Classic RAG is useful, but it is not sufficient as the whole system. Plain vector retrieval is good for semantic recall, but it can fail on the hard parts of this task:
-
-- two people with similar names
-- stale but semantically relevant documents
-- regional metrics that should not be generalized
-- aliases for one project or customer
-- causal chains spread across multiple records
-- conflicts between dashboards, interviews, and executive updates
-
-The production system should use layered retrieval:
-
-1. **Filesystem and metadata search:** path, title, extension, created time, modified time, source system, owner, permissions, and document type.
-2. **Keyword and structured search:** exact names, aliases, customer IDs, dates, metrics, product names, and normalized entity IDs.
-3. **Vector search:** semantic recall over chunks and extracted text.
-4. **Normalized records:** entity maps, alias maps, facts, conflicts, causal chains, unresolved ambiguity records, and provenance pointers.
-5. **Agentic search:** when a question is complex, the agent can inspect files, run helper code, compare evidence, and decide whether more retrieval is needed.
-
-This implementation demonstrates the last two layers most directly. It uses `data/normalized/` as the preferred interpretation layer and the original files as the citation layer. It does not build a custom vector database because the take-home fixture is small and the main risk is not raw recall; the main risk is wrong synthesis. The architecture still leaves room to add vector and keyword indexes later as acceleration layers over the same filesystem-shaped workspace.
-
-In other words, RAG should be an indexing tool inside the system, not the system itself. The source of truth remains the workspace and its provenance. The agent uses indexes to find likely evidence, normalized records to interpret it, and original documents to support the final answer.
-
-## Open Questions
-
-- Which source systems are first-class: Drive, Slack, email, CRM, BI dashboards, ticketing, or manual uploads?
-- Should clarifications be applied automatically, or reviewed before they become durable company knowledge?
-- What is the permission model for mixed-sensitivity workspaces and generated artifacts?
-- How should stale normalized records be detected and regenerated?
-- What confidence thresholds require asking the user instead of answering with a caveat?
-- Should production use persistent agent sessions through MCP, one-shot executions, or a hybrid?
-- What is the expected latency budget for business users versus deeper research workflows?
-
-## How To Run
-
-```bash
-npm install
-npm run query:local -- "What is the current status of Project Confluence?"
-```
-
-For the hosted version, deploy to Vercel and set `OPENAI_API_KEY`. The production endpoint is:
-
-```http
-POST /api/query
-```
-
-Example body:
-
-```json
-{
-  "question": "Which all-hands claims are stale?",
-  "mode": "json"
-}
-```
-
-## Architecture
-
-This solution treats the existing agent harness as the core runtime instead of rebuilding retrieval, planning, code execution, and workspace inspection from scratch.
-
-```text
-Client
-  -> authenticated Next.js chat UI
-  -> chat history store
-  -> Next.js query API route
-  -> Vercel Sandbox
-  -> Codex CLI headless execution with workspace-write permissions
-  -> POSIX workspace: generic AGENTS.md + data/raw-style documents + data/normalized/
-  -> sourced business answer
-```
-
-The important design choice is to keep the runtime generic and put workspace-specific interpretation into data. `AGENTS.md` defines generic operating rules: prefer normalized records for entity/freshness/conflict resolution, back claims with original documents, ask for clarification when ambiguity matters, and never expose internals. It does not contain HelixPay-specific facts.
-
-The normalized layer is produced by a pipeline and lives in `data/normalized/`. It is the preferred interpretation layer for aliases, entities, relationships, conflicts, and causal chains. User-facing citations still point to original documents only; normalized records guide reasoning but do not appear as sources in answers.
-
-The reason to rely on the existing agent harness is compounding quality. The harness already gives us filesystem-native inspection, tool use, command execution, code-writing inside a VM, and model-mediated search. As models and the harness improve, the system benefits without us rebuilding those capabilities in application code.
-
-Codex is allowed to write helper code inside the workspace while answering. Generated scripts, extracted tables, notes, and scratch reports should go under `.internal/agent-artifacts/`; source files under `data/` should not be modified.
-
-## UI And Persistence
-
-The app includes a small chat interface behind username/password authentication. The local take-home storage layer is intentionally simple:
-
-```text
-.internal/chats/
-  <chat-id>.json
-```
-
-On Vercel, chat history is stored in Vercel Blob when `BLOB_READ_WRITE_TOKEN` is attached. Users can create new chats, return to previous chats across redeploys, and continue asking questions. Each user message and answer is appended to the chat record.
-
-For a production version, chat history should be stored in the same remote workspace model or a database keyed to that workspace. The important product property is that history and user clarifications are durable and auditable, not hidden in ephemeral model memory.
-
-## Remote Filesystem Model
-
-The bundled `data/` directory is the take-home fixture, not the final storage architecture.
-
-The intended production architecture is a POSIX-compatible mounted workspace backed by a remote store. Users can dump files into that remote store directly. At query time, Codex sees the same shape it expects locally:
+The core storage contract should be filesystem-shaped:
 
 ```text
 /workspace/customer-id/
@@ -185,115 +52,106 @@ The intended production architecture is a POSIX-compatible mounted workspace bac
     pipeline-artifacts/
 ```
 
-This preserves the agent harness contract while allowing the backing storage to evolve. The simplest production interface is still a filesystem: users and ingestion jobs can sync files into the remote store, and the agent sees a normal POSIX workspace.
+Blob storage, mounted filesystems, POSIX-compatible APIs, and tools such as `rclone` are well understood and scalable. By keeping the agent contract as "inspect this workspace", sync and storage can evolve without changing the query layer.
 
-Filesystem permissions are also a strong boundary for future controls. Read/write permissions can be scoped by workspace, folder, or generated-artifact area. This take-home does not implement full permission management, but the architecture is compatible with it because the main contract is filesystem access rather than bespoke app-level retrieval APIs.
+Filesystem permissions are also a natural future control plane: read/write access can be scoped by workspace, folder, source, or generated-artifact area.
 
-Pipelines can run inside or beside the store to extract OCR/PDF text, normalize aliases, disambiguate entities, generate causal chains, detect conflicts, and write derived files under `data/normalized/` without changing the query interface.
+### 3. Indexing, Search, And Reasoning
 
-The normalized records are preferred but not user-facing evidence. They should include provenance to original documents:
+Classic RAG is useful, but it should be a layer inside the system, not the whole system.
 
-```json
-{
-  "id": "chain.customer_loss",
-  "claim": "Customer loss causal summary",
-  "chain_steps": ["step one", "step two"],
-  "confidence": 0.96,
-  "source_refs": ["data/email/example.md", "data/dashboards/example.html"]
-}
+Plain vector retrieval can find semantically similar text, but it often fails on:
+
+- similar people or teams
+- stale but relevant documents
+- regional metrics that should not be generalized
+- aliases for projects, products, or customers
+- causal chains spread across records
+- conflicts between dashboards, interviews, and updates
+
+A production system should use layered retrieval:
+
+1. Metadata search: path, source system, owner, created time, modified time, extension, permissions.
+2. Keyword and structured search: exact names, aliases, dates, metrics, customer IDs, product names.
+3. Vector search: semantic recall over extracted text and chunks.
+4. Normalized records: entities, aliases, facts, conflicts, causal chains, unresolved ambiguity records.
+5. Agentic search: inspect files, run helper code, compare evidence, and decide whether more search is needed.
+
+## This Implementation
+
+This implementation focuses on the agentic and normalized-data layers because the fixture is small and the main risk is wrong synthesis, not raw recall.
+
+The runtime uses an existing agent harness over a POSIX-style workspace. We could build the agent loop from scratch, but in a short take-home that would spend time on already-solved primitives: file inspection, planning, tool execution, command execution, retries, and structured output. Reusing a state-of-the-art harness lets the implementation focus on product-specific problems: data shape, entity resolution, provenance, citations, persistence, and UX.
+
+The query path is:
+
+```text
+Next.js chat UI
+  -> authenticated API
+  -> Vercel Sandbox
+  -> agent runtime over local workspace files
+  -> answer with original-document references
 ```
 
-At answer time, the agent should inspect normalized records first, then cite the original documents from `source_refs`.
+`AGENTS.md` contains generic operating rules: inspect local company records, resolve entities before answering, prefer normalized records for interpretation, cite original documents only, ask for clarification when ambiguity matters, and keep answers readable for business users.
+
+`data/normalized/` represents the output of a future normalization pipeline. It is the preferred layer for aliases, entity identities, stale facts, conflicts, and causal chains. It guides reasoning, but it is not cited in final answers. Final references point to original files under `data/`.
+
+## Why Vercel
+
+The stack choice is pragmatic. It reflects familiarity with the author's platform and fits the execution model: create an isolated environment, copy workspace files, run the agent, and return the result.
+
+Cloudflare Workers alone cannot run this exact shape because Workers do not support normal child processes. Cloudflare Containers or other container platforms could work if they preserve the same contract: isolated execution over a permissioned filesystem-shaped workspace.
+
+## Persistence
+
+Local chat history is stored under:
+
+```text
+.internal/chats/
+```
+
+On Vercel, chat history uses Vercel Blob when `BLOB_READ_WRITE_TOKEN` is configured. This lets users create chats, return to previous chats, and keep history across redeploys.
+
+In production, chat history, clarifications, feedback, and audit events should be durable workspace or database records, not hidden model memory.
 
 ## Ambiguity Handling
 
-Entity resolution is not just a retrieval problem. Company data often contains repeated names, recycled emails, nicknames, stale org records, and aliases that cannot be resolved confidently from local evidence.
+Entity resolution is not only retrieval. Company data has repeated names, nicknames, stale org charts, duplicated customers, and conflicting metrics.
 
-The agent policy is:
+The policy is:
 
 ```text
 if evidence clearly resolves the entity:
-  answer and cite the evidence
+  answer and cite the original evidence
 else if ambiguity affects the answer:
   ask the user for clarification
 else:
-  answer with a caveat and list the unresolved ambiguity
+  answer with a caveat and list the uncertainty
 ```
 
-When a user clarifies an ambiguity, the clarification should be written back into the POSIX workspace as durable normalized data, for example:
+When a user clarifies an ambiguity, the clarification should be persisted as normalized workspace data so future answers can use it.
 
-```text
-clarifications/
-  resolved.jsonl
-  rules.md
+## Remaining Production Work
 
-data/normalized/
-  entities.jsonl
-  aliases.jsonl
-  unresolved.jsonl
-  clarifications.jsonl
-```
+- real source connectors and sync
+- robust permission model and audit logs
+- generated normalization pipeline
+- vector and keyword indexes as acceleration layers
+- clarification review UI
+- persistent agent sessions or MCP-based sessions
+- prebuilt sandbox image to reduce cold start
+- per-customer credential handling
 
-This keeps the system auditable and prevents hidden chat memory from becoming the only place where company truth lives. The agent can inspect clarification records as preferred interpretation data, while user-facing citations should still point to original documents when possible.
+## Verification
 
-## Why Existing Agent Harness
+Implemented checks cover:
 
-The assignment asks for an agent-friendly interface over scattered company context. We could build the agent loop from scratch: file search, planning, tool execution, context management, structured output, retries, and code execution. For a short take-home, that would be the wrong place to spend most of the time.
-
-The pragmatic choice is to rely on an existing state-of-the-art harness and focus the custom work on the product-specific problems: data shape, entity resolution, provenance, citations, persistence, and user experience.
-
-The existing harness already provides the useful primitives for this small version:
-
-- filesystem-native source inspection
-- workspace rules through `AGENTS.md`
-- command/search loop inside an isolated workspace
-- ability to write and run helper code in a VM when search or parsing needs more than simple text matching
-- non-interactive execution via `codex exec`
-- future MCP compatibility through `codex mcp`
-
-The hosted API is intentionally thin. It brokers isolated agent runs and enforces a structured response contract, but it does not reimplement retrieval, planning, or reasoning from first principles. This also creates leverage over time: as the models and harness improve, the product benefits without requiring a rewrite of the application layer.
-
-## Model Credentials
-
-The preview supports two server-side credential modes:
-
-1. `CODEX_AUTH_JSON_B64`: env-provided shared Codex ChatGPT-plan authentication. This is generated from a machine that already ran `codex login`, then base64-encoded from `~/.codex/auth.json`.
-2. `OPENAI_API_KEY`: usage-based API key fallback.
-
-Each Codex run receives a temporary isolated `CODEX_HOME` containing the env-provided auth file and `preferred_auth_method = "chatgpt"` when Codex auth is configured. The UI does not expose credential management. For a real multi-tenant product, shared credentials should be replaced with per-workspace credential brokering or managed service credentials with audit controls.
-
-## Why Vercel Sandbox
-
-Codex needs a real filesystem and subprocess execution. Vercel Sandbox provides an isolated Linux runtime where the API can install/run Codex, copy or mount the workspace, and execute a workspace-write task inside the sandbox boundary.
-
-Cloudflare Workers alone cannot run this exact shape because Workers do not support functional child processes. Cloudflare Containers could work, but Vercel Sandbox maps more directly to this assignment: create environment, write files, run command, return result.
-
-The broader stack choice is also pragmatic: it reflects familiarity with the author's platform and tools. For a take-home, platform familiarity matters because it reduces integration risk and leaves more time for the actual product and architecture questions. A production team could make a different infrastructure choice if it preserved the same core contract: isolated execution over a permissioned filesystem-shaped workspace.
-
-## Technical Challenges And Decisions
-
-- **Storage model:** use a filesystem-shaped workspace as the core interface. It is simple to sync into, easy to inspect, and maps directly to agent capabilities. A remote POSIX-compatible mount can replace bundled files later without changing the agent contract.
-- **Harness choice:** rely on the state-of-the-art agent harness instead of rebuilding retrieval and tool orchestration. This makes the system organically improve as models and harness capabilities improve.
-- **Normalized data:** prefer `data/normalized/` for entity resolution, conflicts, freshness, and causal chains. Keep original raw documents as the citation layer and audit trail.
-- **Agent autonomy:** allow code execution in the VM so the agent can help itself with search, parsing, table extraction, and consistency checks.
-- **Controls:** filesystem permissions are the natural future control plane for workspace, folder, and artifact access. Full permission management is not implemented in this take-home.
-
-The main remaining product challenges are:
-
-- **Data sourcing and synchronization:** keeping remote files, extracted text, normalized records, and permissions in sync as customers add and update data.
-- **Entity resolution:** building reliable normalization pipelines for aliases, similar people, stale org records, duplicated customers, and conflicting metrics.
-- **Controls:** enforcing read/write permissions, audit logs, provenance, retention, and user-visible trust boundaries.
-
-I used `codex exec` instead of `codex mcp` for the primary path because headless execution is the simplest reliable interface. `codex mcp` is the natural next step for persistent multi-turn sessions.
-
-The current production path installs Codex in the sandbox at runtime for portability. A production version should bake the Codex binary into a sandbox snapshot to reduce cold-start time.
-
-## Future Work
-
-- Remote POSIX mount backed by object storage, so customers upload files without redeploying.
-- Pipeline-written `normalized/` and `pipeline-artifacts/` directories for OCR, PDF extraction, alias maps, and disambiguation notes.
-- User clarification flow for ambiguous entities, with resolved clarifications persisted back into the workspace.
-- Persistent sessions using `codex mcp` and stored response IDs.
-- Prebuilt sandbox snapshot with Codex already installed.
-- Auth, rate limiting, audit logs, and per-customer workspaces.
-- Regression evals with expected answers for questions about Confluence, NPS, CRM, Brazil performance, and org-chart ambiguity.
+- production build
+- hosted login
+- greeting behavior
+- sourced CRM answer
+- multi-turn follow-up
+- persisted chat history
+- source preview
+- entity-resolution evals for ambiguous names, stale claims, regional metrics, product distinctions, and citation rules

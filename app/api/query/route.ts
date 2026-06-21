@@ -91,12 +91,7 @@ function answerFromCodexResult(result: { lastMessage: string; stdout: string; st
     return "I cannot answer right now because the AI service is not available. Please try again later.";
   }
 
-  return (
-    result.lastMessage.trim() ||
-    result.stdout.trim() ||
-    result.stderr.trim() ||
-    "The assistant did not return an answer."
-  );
+  return result.lastMessage.trim() || result.stdout.trim() || "I could not answer that right now. Please try again later.";
 }
 
 function normalizeAssistantText(text: string) {

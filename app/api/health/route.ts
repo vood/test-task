@@ -5,7 +5,6 @@ export const runtime = "nodejs";
 export function GET() {
   return NextResponse.json({
     ok: true,
-    service: "helixpay-codex-context-agent",
+    service: "company-context-assistant",
   });
 }
-
