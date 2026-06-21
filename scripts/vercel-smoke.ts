@@ -75,7 +75,7 @@ const cases: TestCase[] = [
   {
     name: "CRM migration answer is sourced",
     question: "What is the CRM migration status?",
-    mustInclude: ["CRM", "HubSpot", "Pipedrive", "data/"],
+    mustInclude: ["CRM", "HubSpot", "Pipedrive", "Sofia Almeida", "data/"],
     mustNotInclude: [
       "not configured",
       "Unauthorized",
