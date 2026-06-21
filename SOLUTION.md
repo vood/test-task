@@ -1,5 +1,87 @@
 # Solution
 
+## Problem Framing
+
+The assignment is intentionally ambiguous. I treated it less as "build a chatbot over documents" and more as a small version of a company-context system: a business user should be able to ask a question, get a useful answer, understand where the answer came from, and not need to know how the underlying agent works.
+
+The core problem statements are:
+
+1. **Company knowledge is scattered.** Facts live across interviews, updates, dashboards, org notes, and documents with different dates and levels of authority.
+2. **Retrieval alone is not enough.** The hard cases are entity resolution, stale claims, contradictory sources, regional scope, aliases, and causal chains.
+3. **Answers need provenance.** A useful answer must cite original documents so the user can inspect evidence and audit the reasoning.
+4. **The system must stay generic.** The agent rules should not be rewritten for every company or fixture. Company-specific interpretation should live in data and normalization outputs.
+5. **Users need continuity.** Multi-turn chat, persisted history, and durable clarifications matter because business questions rarely fit into one prompt.
+
+## Non-Goals And Scope
+
+This take-home is not trying to build:
+
+- a full enterprise data platform
+- a complete permissions and audit product
+- a custom vector database or ranking engine
+- a finished ingestion pipeline for every file type
+- a production-grade multi-tenant credential broker
+- a replacement for the agent harness
+
+The scope is the smallest working product slice that proves the architecture:
+
+- authenticated chat UI
+- persisted conversations
+- agent execution in an isolated hosted environment
+- filesystem-shaped company workspace
+- normalized records for entity/freshness/conflict reasoning
+- original-document citations
+- source preview
+- regression checks for ambiguous company questions
+
+## How This Solution Addresses It
+
+The solution keeps the runtime generic and moves company-specific interpretation into data.
+
+`AGENTS.md` defines reusable operating rules: inspect company records, resolve entities before answering, prefer normalized records for interpretation, cite original documents only, ask for clarification when ambiguity matters, and keep answers readable for business users.
+
+`data/normalized/` represents the output of a future normalization pipeline. It is the preferred layer for aliases, entity identities, conflicts, stale facts, and causal chains. It guides reasoning, but it does not appear as a user-facing source. The final answer cites original records under `data/`.
+
+The query path uses the existing agent harness over a POSIX-style workspace instead of rebuilding retrieval, planning, source inspection, and code execution in application code. That makes the system simple now and lets it improve as the underlying models and harness improve.
+
+## Ideal Production System
+
+The production version should look like this:
+
+```text
+Customer sources
+  -> connectors and file sync
+  -> remote POSIX-compatible workspace
+  -> ingestion and normalization pipelines
+  -> original records + normalized interpretation records + provenance graph
+  -> isolated agent session with scoped filesystem permissions
+  -> sourced business answer
+  -> durable chat, clarification, audit, and feedback records
+```
+
+Key production components:
+
+- **Remote workspace:** a POSIX-compatible mount backed by object storage or a remote filesystem. Users and connectors can add files without redeploying the app.
+- **Ingestion pipeline:** extracts text from PDFs, docs, email exports, spreadsheets, dashboards, and OCR sources while preserving metadata such as created time, modified time, owner, source system, and permissions.
+- **Normalization pipeline:** writes durable records for entities, aliases, relationships, freshness, conflicts, causal chains, and unresolved ambiguities.
+- **Provenance graph:** every normalized record points back to original documents and extraction spans where possible.
+- **Scoped execution:** each agent run gets only the workspace and permissions it needs. Generated artifacts go to a writable scratch area, not source data.
+- **Clarification loop:** when the evidence is ambiguous, the user can clarify; accepted clarifications are persisted as workspace records instead of hidden chat memory.
+- **Evaluation loop:** regression questions test entity ambiguity, stale data, conflicting metrics, source citations, and non-technical answer quality.
+- **Controls:** authentication, workspace-level authorization, audit logs, retention, rate limits, and per-customer credential handling.
+
+The important design point is that the query interface stays filesystem-native. The storage backend, normalization quality, permissions, and source connectors can mature independently without changing how the agent inspects and reasons over a workspace.
+
+## Open Questions
+
+- Which source systems are first-class: Drive, Slack, email, CRM, BI dashboards, ticketing, or manual uploads?
+- Should clarifications be applied automatically, or reviewed before they become durable company knowledge?
+- What is the permission model for mixed-sensitivity workspaces and generated artifacts?
+- How should stale normalized records be detected and regenerated?
+- What confidence thresholds require asking the user instead of answering with a caveat?
+- Should production use persistent agent sessions through MCP, one-shot executions, or a hybrid?
+- What is the expected latency budget for business users versus deeper research workflows?
+
 ## How To Run
 
 ```bash
