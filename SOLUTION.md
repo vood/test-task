@@ -236,9 +236,13 @@ data/normalized/
 
 This keeps the system auditable and prevents hidden chat memory from becoming the only place where company truth lives. The agent can inspect clarification records as preferred interpretation data, while user-facing citations should still point to original documents when possible.
 
-## Why Codex Harness
+## Why Existing Agent Harness
 
-The assignment asks for an agent-friendly interface over scattered company context. The existing harness already provides the useful primitives for this small version:
+The assignment asks for an agent-friendly interface over scattered company context. We could build the agent loop from scratch: file search, planning, tool execution, context management, structured output, retries, and code execution. For a short take-home, that would be the wrong place to spend most of the time.
+
+The pragmatic choice is to rely on an existing state-of-the-art harness and focus the custom work on the product-specific problems: data shape, entity resolution, provenance, citations, persistence, and user experience.
+
+The existing harness already provides the useful primitives for this small version:
 
 - filesystem-native source inspection
 - workspace rules through `AGENTS.md`
@@ -247,7 +251,7 @@ The assignment asks for an agent-friendly interface over scattered company conte
 - non-interactive execution via `codex exec`
 - future MCP compatibility through `codex mcp`
 
-The hosted API is intentionally thin. It brokers isolated Codex runs and enforces a structured response contract, but it does not reimplement Codex retrieval or reasoning.
+The hosted API is intentionally thin. It brokers isolated agent runs and enforces a structured response contract, but it does not reimplement retrieval, planning, or reasoning from first principles. This also creates leverage over time: as the models and harness improve, the product benefits without requiring a rewrite of the application layer.
 
 ## Model Credentials
 
@@ -263,6 +267,8 @@ Each Codex run receives a temporary isolated `CODEX_HOME` containing the env-pro
 Codex needs a real filesystem and subprocess execution. Vercel Sandbox provides an isolated Linux runtime where the API can install/run Codex, copy or mount the workspace, and execute a workspace-write task inside the sandbox boundary.
 
 Cloudflare Workers alone cannot run this exact shape because Workers do not support functional child processes. Cloudflare Containers could work, but Vercel Sandbox maps more directly to this assignment: create environment, write files, run command, return result.
+
+The broader stack choice is also pragmatic: it reflects familiarity with the author's platform and tools. For a take-home, platform familiarity matters because it reduces integration risk and leaves more time for the actual product and architecture questions. A production team could make a different infrastructure choice if it preserved the same core contract: isolated execution over a permissioned filesystem-shaped workspace.
 
 ## Technical Challenges And Decisions
 
