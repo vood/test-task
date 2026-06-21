@@ -75,11 +75,12 @@ async function collectWorkspaceFiles(root: string): Promise<WorkspaceFile[]> {
 async function walk(root: string, current: string, files: WorkspaceFile[]) {
   const entries = await readdir(current, { withFileTypes: true });
   for (const entry of entries) {
-    if ([".git", "node_modules", ".next"].includes(entry.name)) {
+    const absolute = path.join(current, entry.name);
+    const relative = path.relative(root, absolute);
+    if (!isAgentWorkspacePath(relative)) {
       continue;
     }
 
-    const absolute = path.join(current, entry.name);
     const info = await stat(absolute);
     if (info.isDirectory()) {
       await walk(root, absolute, files);
@@ -90,10 +91,10 @@ async function walk(root: string, current: string, files: WorkspaceFile[]) {
     }
 
     files.push({
-      path: path.relative(root, absolute),
+      path: relative,
       content: await readFile(absolute),
       metadata: {
-        path: path.relative(root, absolute),
+        path: relative,
         extension: path.extname(entry.name).toLowerCase() || "none",
         sizeBytes: info.size,
         createdAt: info.birthtime.toISOString(),
@@ -101,6 +102,10 @@ async function walk(root: string, current: string, files: WorkspaceFile[]) {
       },
     });
   }
+}
+
+function isAgentWorkspacePath(relativePath: string) {
+  return relativePath === "AGENTS.md" || relativePath === "data" || relativePath.startsWith(`data${path.sep}`);
 }
 
 function sourceMetadataFile(files: WorkspaceFile[]): SandboxFile {

@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth/require-user";
 export const runtime = "nodejs";
 
 const CONTENT_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
+  ".html": "text/plain; charset=utf-8",
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
   ".json": "application/json; charset=utf-8",

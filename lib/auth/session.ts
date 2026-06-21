@@ -49,8 +49,8 @@ export function clearSessionCookie(response: NextResponse) {
 }
 
 export function verifyLogin(username: string, password: string) {
-  const expectedUser = process.env.APP_USERNAME ?? "demo";
-  const expectedPassword = process.env.APP_PASSWORD ?? "demo";
+  const expectedUser = requiredAuthEnv("APP_USERNAME", "demo");
+  const expectedPassword = requiredAuthEnv("APP_PASSWORD", "demo");
   return safeEqual(username, expectedUser) && safeEqual(password, expectedPassword);
 }
 
@@ -79,7 +79,18 @@ function sign(payload: string) {
 }
 
 function sessionSecret() {
-  return process.env.AUTH_SECRET ?? "dev-only-change-me";
+  return requiredAuthEnv("AUTH_SECRET", "dev-only-change-me");
+}
+
+function requiredAuthEnv(name: string, developmentFallback: string) {
+  const value = process.env[name];
+  if (value) {
+    return value;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(`${name} must be set in production`);
+  }
+  return developmentFallback;
 }
 
 function safeEqual(left: string, right: string) {
@@ -90,4 +101,3 @@ function safeEqual(left: string, right: string) {
   }
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
-
