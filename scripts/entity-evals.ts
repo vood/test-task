@@ -120,7 +120,7 @@ const allCases: EvalCase[] = [
     name: "CRM migration aliases are unified",
     question: "Are HubSpot migration and Pipedrive migration two separate projects?",
     mustInclude: ["same", "CRM migration", "HubSpot", "Pipedrive"],
-    mustNotInclude: ["two separate projects", "unrelated"],
+    mustNotInclude: ["are two separate projects", "unrelated"],
     requireCitation: true,
   },
   {
