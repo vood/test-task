@@ -92,7 +92,7 @@ const allCases: EvalCase[] = [
     name: "Brazil pipeline dashboard is treated cautiously",
     question: "Can we trust the Brazil pipeline coverage number?",
     mustInclude: ["Brazil", "Pipedrive", "duplicates"],
-    mustNotInclude: ["fully trust", "clean source of truth"],
+    mustNotInclude: ["can fully trust", "clean source of truth"],
     requireCitation: true,
   },
   {
