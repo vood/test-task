@@ -84,7 +84,7 @@ Paste the encoded value into:
 CODEX_AUTH_JSON_B64=...
 ```
 
-The UI uses username/password auth. Defaults are `demo` / `demo`; override them with:
+The UI uses username/password auth. Set explicit credentials with:
 
 ```bash
 APP_USERNAME=...
@@ -120,6 +120,8 @@ APP_PASSWORD=...
 AUTH_SECRET=...
 CODEX_AUTH_JSON_B64=...
 ```
+
+`OPENAI_API_KEY` can be used instead of `CODEX_AUTH_JSON_B64` for model access.
 
 Optional but recommended:
 

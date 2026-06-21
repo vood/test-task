@@ -1,6 +1,6 @@
 # Vercel Test Plan
 
-This plan verifies the hosted HelixPay Company Assistant from a business-user perspective and from the operational requirements of the Codex-on-Vercel architecture.
+This plan verifies the hosted Company Assistant from a business-user perspective and from the operational requirements of the agent-on-Vercel architecture.
 
 ## Release Gates
 
@@ -8,7 +8,7 @@ A preview is shippable only when all gates pass:
 
 1. `npm run build` passes locally.
 2. The app deploys to Vercel Preview with status `READY`.
-3. `CODEX_AUTH_JSON_B64` or `OPENAI_API_KEY` is configured for the target Vercel environment.
+3. `APP_USERNAME`, `APP_PASSWORD`, `AUTH_SECRET`, and either `CODEX_AUTH_JSON_B64` or `OPENAI_API_KEY` are configured for the target Vercel environment.
 4. `npm run test:vercel` passes against the preview URL.
 5. A browser smoke check confirms a business user can sign in, ask a company question, and read a sourced answer without seeing raw JSON, local/sandbox controls, or Codex logs.
 
@@ -28,7 +28,7 @@ BASE_URL=http://localhost:3000 npm run test:vercel
 
 The smoke test:
 
-- signs in with `APP_USERNAME` / `APP_PASSWORD`, defaulting to `demo` / `demo`;
+- signs in with `APP_USERNAME` / `APP_PASSWORD`;
 - submits a greeting and verifies it stays short and non-technical;
 - submits a real chat question: `What is the CRM migration status?`;
 - requires the response to be an AI-generated answer, not a hardcoded greeting;
@@ -67,7 +67,7 @@ Use the latest Vercel Preview URL in a browser.
 Expected:
 
 - Login screen says `HelixPay` and `Company Assistant`.
-- Default credentials work unless overridden.
+- The configured credentials work.
 - Error copy is plain language if credentials are wrong.
 
 ### First Chat
@@ -177,5 +177,5 @@ Expected:
 ## Known Limitations
 
 - Chat history is durable on Vercel when a Blob store is attached through `BLOB_READ_WRITE_TOKEN`. Local development still uses `.internal/chats/`.
-- The sandbox installs Codex at runtime. Production should use a prebuilt Vercel Sandbox snapshot with Codex already installed.
-- Shared Codex auth is acceptable for this take-home preview, but production should use per-workspace credential brokering and audit controls.
+- The sandbox installs the agent CLI at runtime. Production should use a prebuilt Vercel Sandbox snapshot.
+- Shared model credentials are acceptable for this take-home preview, but production should use per-workspace credential brokering and audit controls.
