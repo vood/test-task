@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/require-user";
 import { appendMessage, createChat, readChat } from "@/lib/chat/store";
-import { runCodexLocal } from "@/lib/codex-local";
 import { runCodexInVercelSandbox } from "@/lib/codex-sandbox";
 import { buildCodexPrompt } from "@/lib/prompt";
 
@@ -14,7 +13,6 @@ const QuerySchema = z.object({
   question: z.string().min(1),
   chatId: z.string().optional(),
   mode: z.enum(["brief", "deep", "json"]).default("brief"),
-  runtime: z.enum(["sandbox", "local"]).default("sandbox"),
 });
 
 export async function POST(request: NextRequest) {
@@ -45,19 +43,13 @@ export async function POST(request: NextRequest) {
   const prompt = buildCodexPrompt(parsed.data.question, parsed.data.mode, priorConversation);
 
   try {
-    const result =
-      parsed.data.runtime === "local"
-        ? await runCodexLocal(prompt, workspaceDir)
-        : await runCodexInVercelSandbox(prompt, workspaceDir);
+    const result = await runCodexInVercelSandbox(prompt, workspaceDir);
 
     const assistantContent = normalizeAssistantText(answerFromCodexResult(result));
     await appendMessage(chatId, {
       role: "assistant",
       content: assistantContent,
-      metadata: {
-        ok: result.code === 0,
-        stderr: result.stderr,
-      },
+      metadata: { ok: result.code === 0 },
     });
 
     return NextResponse.json({
@@ -65,19 +57,20 @@ export async function POST(request: NextRequest) {
       chatId,
       answer: parseJsonOrText(assistantContent),
       raw: assistantContent,
-      stderr: result.stderr,
     });
   } catch (error) {
+    const message = "I could not answer that right now. Please try again later.";
+    console.error(error);
     await appendMessage(chatId, {
       role: "assistant",
-      content: error instanceof Error ? error.message : "Unknown error",
+      content: message,
       metadata: { ok: false },
     });
     return NextResponse.json(
       {
         ok: false,
         chatId,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: message,
       },
       { status: 500 },
     );

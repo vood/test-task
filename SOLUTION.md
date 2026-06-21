@@ -139,13 +139,12 @@ The hosted API is intentionally thin. It brokers isolated Codex runs and enforce
 
 ## Model Credentials
 
-The app supports three Codex credential modes:
+The preview supports two server-side credential modes:
 
-1. UI-saved `~/.codex/auth.json`: authenticated users can import the local server machine's Codex auth file, or paste/upload a Codex auth file. It is stored under `.internal/credentials/codex-auth.json`.
-2. `CODEX_AUTH_JSON_B64`: env-provided shared Codex ChatGPT-plan authentication. This is generated from a machine that already ran `codex login`, then base64-encoded from `~/.codex/auth.json`.
-3. `OPENAI_API_KEY`: usage-based API key fallback.
+1. `CODEX_AUTH_JSON_B64`: env-provided shared Codex ChatGPT-plan authentication. This is generated from a machine that already ran `codex login`, then base64-encoded from `~/.codex/auth.json`.
+2. `OPENAI_API_KEY`: usage-based API key fallback.
 
-Each Codex run receives a temporary isolated `CODEX_HOME` containing the auth file and `preferred_auth_method = "chatgpt"` when Codex auth is configured. This lets a reviewer use the hosted app without bringing their own API key. For a real multi-tenant product, shared credentials should be replaced with per-workspace credential brokering or managed service credentials with audit controls.
+Each Codex run receives a temporary isolated `CODEX_HOME` containing the env-provided auth file and `preferred_auth_method = "chatgpt"` when Codex auth is configured. The UI does not expose credential management. For a real multi-tenant product, shared credentials should be replaced with per-workspace credential brokering or managed service credentials with audit controls.
 
 ## Why Vercel Sandbox
 

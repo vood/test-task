@@ -1,12 +1,9 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const STORED_AUTH_PATH = [".internal", "credentials", "codex-auth.json"];
-
 export async function createCodexHome() {
-  const authJson = await readCodexAuthJson();
+  const authJson = readCodexAuthJson();
   if (!authJson) {
     return null;
   }
@@ -25,7 +22,7 @@ export async function createCodexHome() {
 }
 
 export async function sandboxCodexAuthFiles() {
-  const authJson = await readCodexAuthJson();
+  const authJson = readCodexAuthJson();
   const config = {
     path: ".codex/config.toml",
     content: Buffer.from(
@@ -46,73 +43,10 @@ export async function sandboxCodexAuthFiles() {
   ];
 }
 
-export async function hasCodexAuth() {
-  return Boolean(await readCodexAuthJson());
-}
-
-export async function saveCodexAuth(input: string) {
-  const trimmed = input.trim();
-  const json = parseAuthInput(trimmed);
-  const parsed = JSON.parse(json.toString("utf8")) as {
-    token?: string;
-    refreshToken?: string;
-    tokens?: {
-      access_token?: string;
-      refresh_token?: string;
-      id_token?: string;
-    };
-    OPENAI_API_KEY?: unknown;
-  };
-  if (
-    !parsed.token &&
-    !parsed.refreshToken &&
-    !parsed.tokens?.access_token &&
-    !parsed.tokens?.refresh_token &&
-    !parsed.tokens?.id_token &&
-    !parsed.OPENAI_API_KEY
-  ) {
-    throw new Error("Access file must include valid assistant credentials");
-  }
-
-  const file = storedAuthFile();
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, json, { mode: 0o600 });
-}
-
-export async function importLocalCodexAuth() {
-  const localAuth = await readFile(path.join(homedir(), ".codex", "auth.json"), "utf8");
-  await saveCodexAuth(localAuth);
-}
-
-async function readCodexAuthJson() {
-  if (process.env.CODEX_AUTH_JSON_B64) {
-    return Buffer.from(process.env.CODEX_AUTH_JSON_B64, "base64");
-  }
-
-  try {
-    return await readFile(storedAuthFile());
-  } catch {
-    return null;
-  }
-}
-
-function parseAuthInput(input: string) {
-  if (input.startsWith("{")) {
-    JSON.parse(input);
-    return Buffer.from(input, "utf8");
-  }
-
-  const decoded = Buffer.from(input, "base64");
-  JSON.parse(decoded.toString("utf8"));
-  return decoded;
-}
-
-function storedAuthFile() {
-  return path.join(dataRoot(), "credentials", "codex-auth.json");
-}
-
-function dataRoot() {
-  return process.env.DATA_DIR ?? (process.env.VERCEL ? "/tmp/helixpay-context-agent" : path.join(process.cwd(), ".internal"));
+function readCodexAuthJson() {
+  return process.env.CODEX_AUTH_JSON_B64
+    ? Buffer.from(process.env.CODEX_AUTH_JSON_B64, "base64")
+    : null;
 }
 
 export function codexAuthEnv(codexHome: string | null) {

@@ -54,7 +54,7 @@ Then call:
 ```bash
 curl -X POST http://localhost:3000/api/query \
   -H 'content-type: application/json' \
-  -d '{"runtime":"local","question":"Which all-hands claims are stale?"}'
+  -d '{"question":"Which all-hands claims are stale?"}'
 ```
 
 ## Production
