@@ -126,7 +126,7 @@ const allCases: EvalCase[] = [
   {
     name: "Board risk synthesis keeps issues separate",
     question: "What should the board worry about: Confluence, CRM, or Brazil sales?",
-    mustInclude: ["Confluence", "CRM", "Brazil"],
+    mustInclude: ["Confluence", "CRM", "Brasil"],
     mustNotInclude: ["same issue", "single cause"],
     requireCitation: true,
   },
