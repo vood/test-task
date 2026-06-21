@@ -1,58 +1,86 @@
-# Codos take-home
+# HelixPay Codex Context Agent
 
-Codos turns a company's scattered context — docs, transcripts, dashboards, conversations — into something AI agents can reason over reliably. This take-home asks you to build a small version of that.
+This is a minimal hosted company-context agent for the Codos take-home.
 
-## The task
+The implementation intentionally keeps the agent harness as the runtime:
 
-You're given `data/` — a snapshot from a fictional B2B payments company called **HelixPay**. 
+- `AGENTS.md` defines generic source resolution rules.
+- `data/normalized/` is the preferred interpretation layer for entities, aliases, conflicts, and causal chains.
+- Original documents under `data/` remain the user-facing citation and audit layer.
+- `POST /api/query` runs Codex against that filesystem.
+- Production uses Vercel Sandbox so the Codex harness runs in an isolated Linux environment.
+- Codex runs with workspace write access and may create helper artifacts under `.internal/agent-artifacts/`.
+- Local development can run the same prompt through `codex exec` directly.
 
-Build a system that ingests it and exposes a programmatic interface for answering deep questions about the company. The consumer is an AI agent. Turn this raw data into a clean ontology about the organization.
+## Run Locally
 
-Several requirements:
+Install dependencies:
 
-- **Agent-friendly.** The interface is built for an AI agent to call, not a human at a search box. CLI, HTTP, MCP, library — your call.
-- **Deep questions, good answers, reasonable time.** The interesting queries don't have single-passage answers. They cut across the dataset; they involve staleness, aliases, hierarchy, contradictions; they need source attribution. Returning good answers to questions like these in reasonable time is the bar. How you divide the work between ingestion-time and query-time is yours to decide.
-- **Built for a moving target.** The dataset will keep changing in real life — new files arrive, old ones get updated, things get re-imported. You don't need to implement live ingestion, but the architecture should make adding it later a small change, not a rewrite.
-- - **Should be live in production** - not local.
-
-## What's in `data/`
-
-```
-overview.md                     COO orientation note
-org-chart.md                    Org chart, mid-April 2026
-all-hands-2026-04-15.md         Company meeting transcript
-weekly-review-2026-04-21.md     Weekly business review
-board-update-2026-04-22.md      Board email
-q1-2026-results.pdf             Q1 financials
-board-deck-q1-2026.pdf          Board deck
-interviews/                     24 employee Q&A interviews
-dashboards/                     HTML dashboard exports
-images/                         Charts and screenshots (JPEG)
-chat/                           Slack channel exports
-email/                          Customer and exec email threads
-code/                           GitHub contributor analysis
+```bash
+npm install
 ```
 
-It's deliberately what you'd actually receive on day one: multiple formats, inconsistent naming, mixed languages, stale alongside fresh, noise alongside signal, internal contradictions. The CEO does not have a structured interview in this sample; CEO context appears in the all-hands transcript, board update, exec chat, and email threads.
+Set an OpenAI API key:
 
-## Build quality
+```bash
+cp .env.example .env.local
+```
 
-We expect that most of the code will be LLM-written — that's fine, that's how we work too. We won't dock you for a missing edge case or a function that could be cleaner. What we're looking for is the part where LLM is not (yet) reliable: a thought-through architecture, a project setup that runs, and the conventions you put around the model so it produces production-grade code instead of slop. That's what we'll be reading for.
+Alternatively, use shared Codex ChatGPT auth so evaluators do not need their own API keys. Set it through env:
 
-## Constraints
+```bash
+codex login
+base64 -i ~/.codex/auth.json | tr -d '\n'
+```
 
-- **Time budget: about 4-6 hours of focused work.** That's the size of the task we have in mind, including the writeup. 
-- **Stack is your call.** We use Python and TypeScript day-to-day and we work with Claude. Pick whatever lets you ship.
-- **LLMs are part of the system.** Use them. We'll be interested in *how* — when, where, with what context.
-- **No starter code on purpose.** How you set up a project is signal.
+Paste that value into `CODEX_AUTH_JSON_B64`. When an env-provided Codex auth file is present, the app creates an isolated temporary `CODEX_HOME` for each Codex run and prefers ChatGPT auth. `OPENAI_API_KEY` remains a fallback.
 
-## Submission
+The UI uses simple username/password auth. Defaults are `demo` / `demo`; override them with `APP_USERNAME`, `APP_PASSWORD`, and `AUTH_SECRET`.
 
-Pack your solution into a zip and send it to **gleb@codos.ai** and **dima@codos.ai**. Include a file `SOLUTION.md` that:
+Run the local Codex path:
 
-1. Documents how to run what you built — ideally one command from a fresh clone.
-2. Describes the tradeoffs you faced and the calls you made.
-3. Justifies the architectural choices that mattered.
-4. Calls out what you didn't tackle. The dataset has plenty of quirks and edge cases and you won't (and shouldn't) handle all of them in 4-6 hours. Name the ones you left as future work and, for each, say why it's less important for the real product and less interesting as part of this exercise.
+```bash
+npm run query:local -- "What is the current status of Project Confluence?"
+```
 
-A 2–5 minute video walkthrough is welcome but optional.
+Run the web app:
+
+```bash
+npm run dev
+```
+
+Then call:
+
+```bash
+curl -X POST http://localhost:3000/api/query \
+  -H 'content-type: application/json' \
+  -d '{"runtime":"local","question":"Which all-hands claims are stale?"}'
+```
+
+## Production
+
+Deploy to Vercel with `OPENAI_API_KEY` configured. The default API runtime is Vercel Sandbox:
+
+```bash
+curl -X POST https://your-app.vercel.app/api/query \
+  -H 'content-type: application/json' \
+  -d '{"question":"What should the board worry about before May 12?"}'
+```
+
+Chat history is persisted as JSON files under `.internal/chats/` locally. On Vercel, set `BLOB_READ_WRITE_TOKEN` by attaching a Vercel Blob store so conversation history survives function restarts and redeploys.
+
+## Vercel Verification
+
+Run the hosted smoke test against a protected Vercel Preview:
+
+```bash
+VERCEL_DEPLOYMENT=https://your-preview.vercel.app npm run test:vercel
+```
+
+Run the same test against a public or local URL:
+
+```bash
+BASE_URL=http://localhost:3000 npm run test:vercel
+```
+
+The full release checklist and business-user manual QA plan are in `TEST_PLAN.md`.
