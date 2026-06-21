@@ -1,18 +1,57 @@
-# HelixPay Codex Context Agent
+# Company Context Assistant
 
-This is a minimal hosted company-context agent for the Codos take-home.
+A hosted chat app for asking questions over messy company records.
 
-The implementation intentionally keeps the agent harness as the runtime:
+The app is built for the Codos take-home task. It lets a business user sign in, ask natural-language questions, continue multi-turn conversations, open referenced files, and get plain-language answers backed by original source documents.
 
-- `AGENTS.md` defines generic source resolution rules.
-- `data/normalized/` is the preferred interpretation layer for entities, aliases, conflicts, and causal chains.
-- Original documents under `data/` remain the user-facing citation and audit layer.
-- `POST /api/query` runs Codex against that filesystem.
-- Production uses Vercel Sandbox so the Codex harness runs in an isolated Linux environment.
-- Codex runs with workspace write access and may create helper artifacts under `.internal/agent-artifacts/`.
-- Local development can run the same prompt through `codex exec` directly.
+## What It Does
 
-## Run Locally
+- Answers questions from the bundled `data/` records.
+- Preserves chat history across reloads and redeploys when Vercel Blob is configured.
+- Resolves ambiguous entities such as similar people, regions, products, customers, and initiatives.
+- Uses normalized records for interpretation, but cites only original documents in user-facing answers.
+- Shows references with `[1]`, `[2]` style citations and a file preview UI.
+- Avoids exposing implementation details in the business-user chat experience.
+
+## Architecture
+
+```text
+Next.js chat UI
+  -> username/password session
+  -> chat history store
+  -> /api/query
+  -> isolated Vercel Sandbox
+  -> agent runtime over a POSIX-style workspace
+  -> sourced answer with original-document references
+```
+
+The core design decision is to keep the workspace filesystem-shaped:
+
+```text
+AGENTS.md
+data/
+  original company records
+  normalized/
+    entities.jsonl
+    facts.jsonl
+    causal_chains.jsonl
+```
+
+`data/normalized/` is the preferred interpretation layer for aliases, entity resolution, stale facts, conflicts, and causal chains. It is not shown as answer evidence. Final answers cite the original company documents under `data/`.
+
+This keeps the implementation simple now and leaves a clean path to a remote POSIX-compatible store later, where users or ingestion jobs can sync files without changing the query interface.
+
+## Key Product Rules
+
+- Answer from local company records, not model memory.
+- Use resolved canonical entity names in answers.
+- Ask for clarification when ambiguity materially changes the answer.
+- Prefer newer or more authoritative evidence when records conflict.
+- Explain uncertainty and conflicts when they matter.
+- Cite original documents only.
+- Keep answers readable for non-technical business users.
+
+## Local Setup
 
 Install dependencies:
 
@@ -20,67 +59,112 @@ Install dependencies:
 npm install
 ```
 
-Set an OpenAI API key:
+Create local env:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Alternatively, use shared Codex ChatGPT auth so evaluators do not need their own API keys. Set it through env:
+Set either:
+
+```bash
+OPENAI_API_KEY=...
+```
+
+or shared ChatGPT-plan auth:
 
 ```bash
 codex login
 base64 -i ~/.codex/auth.json | tr -d '\n'
 ```
 
-Paste that value into `CODEX_AUTH_JSON_B64`. When an env-provided Codex auth file is present, the app creates an isolated temporary `CODEX_HOME` for each Codex run and prefers ChatGPT auth. `OPENAI_API_KEY` remains a fallback.
-
-The UI uses simple username/password auth. Defaults are `demo` / `demo`; override them with `APP_USERNAME`, `APP_PASSWORD`, and `AUTH_SECRET`.
-
-Run the local Codex path:
+Paste the encoded value into:
 
 ```bash
-npm run query:local -- "What is the current status of Project Confluence?"
+CODEX_AUTH_JSON_B64=...
 ```
 
-Run the web app:
+The UI uses username/password auth. Defaults are `demo` / `demo`; override them with:
+
+```bash
+APP_USERNAME=...
+APP_PASSWORD=...
+AUTH_SECRET=...
+```
+
+Run the app:
 
 ```bash
 npm run dev
 ```
 
-Then call:
+Run a local command-line query:
 
 ```bash
-curl -X POST http://localhost:3000/api/query \
-  -H 'content-type: application/json' \
-  -d '{"question":"Which all-hands claims are stale?"}'
+npm run query:local -- "What is the current status of Project Confluence?"
 ```
 
-## Production
+## Deploy
 
-Deploy to Vercel with `OPENAI_API_KEY` configured. The default API runtime is Vercel Sandbox:
+Deploy to Vercel with:
 
 ```bash
-curl -X POST https://your-app.vercel.app/api/query \
-  -H 'content-type: application/json' \
-  -d '{"question":"What should the board worry about before May 12?"}'
+npx vercel deploy --yes
 ```
 
-Chat history is persisted as JSON files under `.internal/chats/` locally. On Vercel, set `BLOB_READ_WRITE_TOKEN` by attaching a Vercel Blob store so conversation history survives function restarts and redeploys.
+Required environment:
 
-## Vercel Verification
+```bash
+APP_USERNAME=...
+APP_PASSWORD=...
+AUTH_SECRET=...
+CODEX_AUTH_JSON_B64=...
+```
 
-Run the hosted smoke test against a protected Vercel Preview:
+Optional but recommended:
+
+```bash
+BLOB_READ_WRITE_TOKEN=...
+```
+
+Without Vercel Blob, chat history is stored locally under `.internal/chats/` and may not survive serverless restarts or redeploys. With Vercel Blob attached, past conversations remain available in the UI.
+
+## Verify
+
+Build:
+
+```bash
+npm run build
+```
+
+Run hosted smoke tests against a Vercel Preview:
 
 ```bash
 VERCEL_DEPLOYMENT=https://your-preview.vercel.app npm run test:vercel
 ```
 
-Run the same test against a public or local URL:
+Run entity-resolution evals:
 
 ```bash
-BASE_URL=http://localhost:3000 npm run test:vercel
+VERCEL_DEPLOYMENT=https://your-preview.vercel.app npm run test:entities
 ```
 
-The full release checklist and business-user manual QA plan are in `TEST_PLAN.md`.
+The smoke test covers login, greeting behavior, sourced answers, multi-turn follow-up, persisted chat history, and source preview. The entity evals cover ambiguous people, stale claims, product distinctions, regional metrics, and original-document citations.
+
+## Implementation Notes
+
+- `app/api/query/route.ts` is the main question-answering endpoint.
+- `components/chat-app.tsx` contains the mobile-friendly chat UI.
+- `lib/chat/store.ts` stores and retrieves conversations.
+- `lib/codex-sandbox.ts` runs the isolated hosted agent process.
+- `lib/prompt.ts` builds the runtime answer contract.
+- `AGENTS.md` defines repository-level reasoning and citation rules.
+- `data/normalized/` contains the normalization output used for interpretation.
+- `SOLUTION.md` has the deeper architecture write-up and tradeoffs.
+
+## Known Gaps
+
+- Full per-workspace permission management is not implemented in this take-home.
+- The hosted runtime installs the agent CLI at execution time; a production version should use a prebuilt sandbox image.
+- Normalization is represented as checked-in records here; in production it should be generated by ingestion pipelines.
+- Clarification persistence is specified in the agent rules, but a dedicated UI flow for reviewing and approving clarifications is future work.
