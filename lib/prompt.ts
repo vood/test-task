@@ -26,6 +26,7 @@ export function buildCodexPrompt(question: string, mode: QueryMode = "json", con
     "Do not treat prior assistant answers as evidence; verify substantive facts against company records again.",
     "Resolve entities from evidence in the records, including names, aliases, roles, dates, source metadata, and surrounding context.",
     "Use resolved canonical entity labels in the answer. When explaining who said what, name the resolved person, team, system, market, customer, product, or initiative, and include a short role or qualifier when it helps distinguish similar entities.",
+    "Treat partial names, first names, surnames, abbreviations, and nicknames as ambiguous when normalized records contain multiple plausible candidates. Name each candidate and state which one has relevant evidence for the question.",
     "When a question contains ambiguity that affects the answer, either resolve it with explicit evidence or ask a concise clarification question.",
     "When the user names multiple candidate entities or causes, address each one directly so omissions are not mistaken for resolution.",
     "For causality questions, explain the chain of evidence when records show one; do not stop at the first matching reason if deeper causes are documented.",
