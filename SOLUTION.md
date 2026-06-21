@@ -46,6 +46,12 @@ The query path uses the existing agent harness over a POSIX-style workspace inst
 
 ## Ideal Production System
 
+In production I see three core parts:
+
+1. **Chat and user experience.** This is mostly a solved problem. The product should reuse off-the-shelf chat UI, auth, streaming, persistence, file preview, and conversation components where possible. The differentiator is not a custom chat box; it is the quality, trust, and controllability of answers over company data.
+2. **Data sync and permissions.** This is a hard product problem. The system needs reliable connectors, file sync, metadata capture, source freshness, deletion handling, access control, and auditability.
+3. **Indexing, search, and reasoning.** The system needs to decide what to retrieve, how to resolve entities, how to handle stale or conflicting facts, and when to ask the user for clarification.
+
 The production version should look like this:
 
 ```text
@@ -61,6 +67,7 @@ Customer sources
 
 Key production components:
 
+- **Chat shell:** use existing chat components and SDK patterns for message rendering, streaming, history, attachments, and mobile behavior. Build custom UI only where the product needs source inspection, clarification review, or workspace controls.
 - **Remote workspace:** a POSIX-compatible mount backed by object storage or a remote filesystem. Users and connectors can add files without redeploying the app.
 - **Ingestion pipeline:** extracts text from PDFs, docs, email exports, spreadsheets, dashboards, and OCR sources while preserving metadata such as created time, modified time, owner, source system, and permissions.
 - **Normalization pipeline:** writes durable records for entities, aliases, relationships, freshness, conflicts, causal chains, and unresolved ambiguities.
@@ -70,7 +77,30 @@ Key production components:
 - **Evaluation loop:** regression questions test entity ambiguity, stale data, conflicting metrics, source citations, and non-technical answer quality.
 - **Controls:** authentication, workspace-level authorization, audit logs, retention, rate limits, and per-customer credential handling.
 
-The important design point is that the query interface stays filesystem-native. The storage backend, normalization quality, permissions, and source connectors can mature independently without changing how the agent inspects and reasons over a workspace.
+The important design point is that the query interface stays filesystem-native. Blob storage, sync tools, and filesystem abstractions are well understood and scalable. Tools like `rclone`, object stores, mounted volumes, and POSIX-compatible APIs already solve large parts of durable file movement. By keeping the agent contract as "inspect this workspace", the storage backend, normalization quality, permissions, and source connectors can mature independently without changing how the agent reasons over data.
+
+## Search And Indexing Strategy
+
+Classic RAG is useful, but it is not sufficient as the whole system. Plain vector retrieval is good for semantic recall, but it can fail on the hard parts of this task:
+
+- two people with similar names
+- stale but semantically relevant documents
+- regional metrics that should not be generalized
+- aliases for one project or customer
+- causal chains spread across multiple records
+- conflicts between dashboards, interviews, and executive updates
+
+The production system should use layered retrieval:
+
+1. **Filesystem and metadata search:** path, title, extension, created time, modified time, source system, owner, permissions, and document type.
+2. **Keyword and structured search:** exact names, aliases, customer IDs, dates, metrics, product names, and normalized entity IDs.
+3. **Vector search:** semantic recall over chunks and extracted text.
+4. **Normalized records:** entity maps, alias maps, facts, conflicts, causal chains, unresolved ambiguity records, and provenance pointers.
+5. **Agentic search:** when a question is complex, the agent can inspect files, run helper code, compare evidence, and decide whether more retrieval is needed.
+
+This implementation demonstrates the last two layers most directly. It uses `data/normalized/` as the preferred interpretation layer and the original files as the citation layer. It does not build a custom vector database because the take-home fixture is small and the main risk is not raw recall; the main risk is wrong synthesis. The architecture still leaves room to add vector and keyword indexes later as acceleration layers over the same filesystem-shaped workspace.
+
+In other words, RAG should be an indexing tool inside the system, not the system itself. The source of truth remains the workspace and its provenance. The agent uses indexes to find likely evidence, normalized records to interpret it, and original documents to support the final answer.
 
 ## Open Questions
 
