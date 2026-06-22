@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "normalize": "tsx scripts/normalize-data.ts",
     "query:local": "tsx scripts/query-local.ts",
     "test:vercel": "tsx scripts/vercel-smoke.ts",
     "test:entities": "tsx scripts/entity-evals.ts"

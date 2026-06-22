@@ -7,5 +7,6 @@ node_modules/
 .next/
 tsconfig.tsbuildinfo
 .vercel
+.omc/
 .env*
 !.env.example

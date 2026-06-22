@@ -104,6 +104,12 @@ Run a local command-line query:
 npm run query:local -- "What is the current status of Project Confluence?"
 ```
 
+Regenerate the normalized interpretation layer:
+
+```bash
+npm run normalize
+```
+
 ## Deploy
 
 Deploy to Vercel with:
@@ -157,11 +163,12 @@ The smoke test covers login, greeting behavior, sourced answers, multi-turn foll
 
 - `app/api/query/route.ts` is the main question-answering endpoint.
 - `components/chat-app.tsx` contains the mobile-friendly chat UI.
+- `components/ai-elements/message.tsx` wraps the off-the-shelf Streamdown/AI Elements-style renderer used for assistant answers and markdown source previews.
 - `lib/chat/store.ts` stores and retrieves conversations.
 - `lib/codex-sandbox.ts` runs the isolated hosted agent process.
 - `lib/prompt.ts` builds the runtime answer contract.
 - `AGENTS.md` defines repository-level reasoning and citation rules.
-- `data/normalized/` contains the normalization output used for interpretation.
+- `scripts/normalize-data.ts` generates `data/normalized/`, the normalization output used for interpretation.
 - `SOLUTION.md` has the deeper architecture write-up and tradeoffs.
 
 ## Known Gaps

@@ -35,7 +35,7 @@ There are three main product areas.
 
 Chat is mostly a solved problem. A production product should reuse off-the-shelf components for message rendering, streaming, history, auth, attachments, and mobile behavior.
 
-The custom UI should focus on product-specific needs: source inspection, clarification review, workspace controls, and trust signals.
+This implementation follows that direction for the highest-risk part of the UI: assistant answers and markdown source previews are rendered through a Streamdown/AI Elements-style renderer instead of custom markdown parsing. The remaining custom UI is the thin product shell: chat list, composer, authentication screen, source preview, and reference buttons. In production I would continue replacing those shell pieces with off-the-shelf chat/auth components where they do not carry product-specific behavior.
 
 ### 2. Data Sync And Permissions
 
@@ -95,7 +95,7 @@ Next.js chat UI
 
 `AGENTS.md` contains generic operating rules: inspect local company records, resolve entities before answering, prefer normalized records for interpretation, cite original documents only, ask for clarification when ambiguity matters, and keep answers readable for business users.
 
-`data/normalized/` represents the output of a future normalization pipeline. It is the preferred layer for aliases, entity identities, stale facts, conflicts, and causal chains. It guides reasoning, but it is not cited in final answers. Final references point to original files under `data/`.
+`scripts/normalize-data.ts` generates `data/normalized/`. The current pipeline is intentionally simple: it parses interview metadata for ambiguous people, applies deterministic normalization rules for known products/initiatives/facts/causal chains, validates every `source_ref`, and writes JSONL records. The normalized layer is preferred for aliases, entity identities, stale facts, conflicts, and causal chains, but it is not cited in final answers. Final references point to original files under `data/`.
 
 ## Why Vercel
 
@@ -136,7 +136,7 @@ When a user clarifies an ambiguity, the clarification should be persisted as nor
 
 - real source connectors and sync
 - robust permission model and audit logs
-- generated normalization pipeline
+- richer generated normalization pipeline with OCR/PDF/table extraction and confidence review
 - vector and keyword indexes as acceleration layers
 - clarification review UI
 - persistent agent sessions or MCP-based sessions
