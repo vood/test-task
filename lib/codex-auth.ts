@@ -1,4 +1,6 @@
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -44,9 +46,12 @@ export async function sandboxCodexAuthFiles() {
 }
 
 function readCodexAuthJson() {
-  return process.env.CODEX_AUTH_JSON_B64
-    ? Buffer.from(process.env.CODEX_AUTH_JSON_B64, "base64")
-    : null;
+  if (process.env.CODEX_AUTH_JSON_B64) {
+    return Buffer.from(process.env.CODEX_AUTH_JSON_B64, "base64");
+  }
+
+  const localAuthPath = path.join(homedir(), ".codex", "auth.json");
+  return existsSync(localAuthPath) ? readFileSync(localAuthPath) : null;
 }
 
 export function codexAuthEnv(codexHome: string | null) {

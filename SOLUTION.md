@@ -95,7 +95,11 @@ Next.js chat UI
 
 `AGENTS.md` contains generic operating rules: inspect local company records, resolve entities before answering, prefer normalized records for interpretation, cite original documents only, ask for clarification when ambiguity matters, and keep answers readable for business users.
 
-`scripts/normalize-data.ts` generates `data/normalized/`. The current pipeline is intentionally simple: it parses interview metadata for ambiguous people, applies deterministic normalization rules for known products/initiatives/facts/causal chains, validates every `source_ref`, and writes JSONL records. The normalized layer is preferred for aliases, entity identities, stale facts, conflicts, and causal chains, but it is not cited in final answers. Final references point to original files under `data/`.
+`scripts/normalize-data.ts` generates `data/normalized/` through an LLM resolution pass. Codex CLI inspects the original `data/` corpus and proposes normalized entities, aliases, conflicts, freshness facts, and causal chains. Deterministic code then validates the returned JSON shape, required coverage, duplicate IDs, and every `source_ref` before writing JSONL.
+
+This split matters. Semantic resolution is exactly where an LLM is useful: it can read across interviews, dashboards, emails, board updates, and chat logs to decide that two similar names are different people, that one document supersedes another, or that a customer loss has a multi-step cause. Deterministic code is still used for controls: schema enforcement, provenance validation, repeatable file output, and failing closed when the LLM output is incomplete.
+
+The normalized layer is preferred for aliases, entity identities, stale facts, conflicts, and causal chains, but it is not cited in final answers. Final references point to original files under `data/`.
 
 ## Why Vercel
 
