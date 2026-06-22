@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/require-user";
+import { buildSourceMetadata } from "@/lib/source-metadata";
 
 export const runtime = "nodejs";
 
@@ -28,20 +29,29 @@ export async function GET(request: NextRequest) {
   const extension = path.extname(safePath).toLowerCase();
   const isText = TEXT_EXTENSIONS.has(extension);
 
+  const raw = await readFile(absolutePath);
+  const content = isText ? raw.toString("utf8") : "";
+  const metadata = buildSourceMetadata({
+    path: safePath,
+    content,
+    sizeBytes: info.size,
+    birthtime: info.birthtime,
+    mtime: info.mtime,
+  });
+
   if (!isText) {
     return NextResponse.json({
       path: safePath,
       type: "binary",
-      metadata: fileMetadata(info, extension),
+      metadata,
       content: "",
     });
   }
 
-  const content = await readFile(absolutePath, "utf8");
   return NextResponse.json({
     path: safePath,
     type: "text",
-    metadata: fileMetadata(info, extension),
+    metadata,
     content,
   });
 }
@@ -52,13 +62,4 @@ function normalizeSourcePath(input: string) {
     return null;
   }
   return normalized;
-}
-
-function fileMetadata(info: { size: number; birthtime: Date; mtime: Date }, extension: string) {
-  return {
-    extension: extension || "none",
-    sizeBytes: info.size,
-    createdAt: info.birthtime.toISOString(),
-    modifiedAt: info.mtime.toISOString(),
-  };
 }

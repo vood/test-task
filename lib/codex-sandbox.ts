@@ -2,6 +2,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { Sandbox } from "@vercel/sandbox";
 import { sandboxCodexAuthFiles } from "./codex-auth";
+import { buildSourceMetadata, type SourceMetadata } from "./source-metadata";
 
 type SandboxFile = {
   path: string;
@@ -10,14 +11,6 @@ type SandboxFile = {
 
 type WorkspaceFile = SandboxFile & {
   metadata: SourceMetadata;
-};
-
-type SourceMetadata = {
-  path: string;
-  extension: string;
-  sizeBytes: number;
-  createdAt: string;
-  modifiedAt: string;
 };
 
 export async function runCodexInVercelSandbox(prompt: string, workspaceDir: string) {
@@ -90,16 +83,17 @@ async function walk(root: string, current: string, files: WorkspaceFile[]) {
       continue;
     }
 
+    const content = await readFile(absolute);
     files.push({
       path: relative,
-      content: await readFile(absolute),
-      metadata: {
+      content,
+      metadata: buildSourceMetadata({
         path: relative,
-        extension: path.extname(entry.name).toLowerCase() || "none",
         sizeBytes: info.size,
-        createdAt: info.birthtime.toISOString(),
-        modifiedAt: info.mtime.toISOString(),
-      },
+        birthtime: info.birthtime,
+        mtime: info.mtime,
+        content: isMetadataTextFile(relative) ? content.toString("utf8") : "",
+      }),
     });
   }
 }
@@ -118,4 +112,8 @@ function sourceMetadataFile(files: WorkspaceFile[]): SandboxFile {
     path: ".internal/source-metadata.json",
     content: Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), files: dataFiles }, null, 2), "utf8"),
   };
+}
+
+function isMetadataTextFile(filePath: string) {
+  return [".html", ".json", ".jsonl", ".md", ".txt"].includes(path.extname(filePath).toLowerCase());
 }

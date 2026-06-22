@@ -31,6 +31,10 @@ type SourceFile = {
   metadata: {
     extension: string;
     sizeBytes: number;
+    documentDate?: string | null;
+    dateSource?: string;
+    filesystemCreatedAt?: string;
+    filesystemModifiedAt?: string;
     createdAt: string;
     modifiedAt: string;
   };
@@ -460,12 +464,12 @@ function SourceViewer({ file }: { file: SourceFile }) {
     <>
       <dl className="sourceMeta">
         <div>
-          <dt>Created</dt>
-          <dd>{formatDate(file.metadata.createdAt)}</dd>
+          <dt>Document date</dt>
+          <dd>{file.metadata.documentDate ? formatDate(file.metadata.documentDate) : "Unknown"}</dd>
         </div>
         <div>
-          <dt>Modified</dt>
-          <dd>{formatDate(file.metadata.modifiedAt)}</dd>
+          <dt>Date source</dt>
+          <dd>{file.metadata.dateSource ?? "Unknown"}</dd>
         </div>
         <div>
           <dt>Type</dt>

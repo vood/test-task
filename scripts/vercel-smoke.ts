@@ -15,6 +15,8 @@ type SourceResponse = {
   type?: "text" | "binary";
   metadata?: {
     sizeBytes?: number;
+    documentDate?: string | null;
+    dateSource?: string;
     createdAt?: string;
     modifiedAt?: string;
   };
@@ -182,6 +184,11 @@ async function main() {
     assert(source.path === "data/weekly-review-2026-04-21.md", "source API should return requested path");
     assert(source.type === "text", "source API should return text source type");
     assert(Boolean(source.content?.includes("CRM")), "source API should return file content");
+    assert(
+      source.metadata?.documentDate?.startsWith("2026-04-21"),
+      "source API should return documentDate from source provenance, not deployment filesystem time",
+    );
+    assert(source.metadata?.dateSource === "file path date", "source API should explain documentDate source");
     assert(Boolean(source.metadata?.createdAt), "source API should return createdAt metadata");
     assert(Boolean(source.metadata?.modifiedAt), "source API should return modifiedAt metadata");
     assert(Boolean(source.metadata?.sizeBytes), "source API should return size metadata");
