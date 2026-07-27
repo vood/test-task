@@ -1,0 +1,1828 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU Credit Bench — Python</title>
+</head>
+<body>
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #eef1f7;
+    --surface: #ffffff;
+    --surface-sunk: #f5f7fb;
+    --line: #d5dbe8;
+    --line-soft: #e5e9f2;
+    --ink: #131826;
+    --ink-soft: #4d5670;
+    --ink-faint: #79839c;
+    --accent: #2748d8;
+    --accent-soft: #e7ebfd;
+    --on-accent: #ffffff;
+    --pass: #0d8055;
+    --pass-soft: #e0f3ec;
+    --fail: #c02a45;
+    --fail-soft: #fce8ec;
+    --warn: #9a5f00;
+    --warn-soft: #fbeed6;
+    --shadow: 0 1px 2px rgba(19, 24, 38, .06), 0 8px 24px -16px rgba(19, 24, 38, .35);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --ground: #0b0e14;
+      --surface: #141924;
+      --surface-sunk: #10151f;
+      --line: #29313f;
+      --line-soft: #1f2632;
+      --ink: #e7ebf4;
+      --ink-soft: #a5aec4;
+      --ink-faint: #737d94;
+      --accent: #7e9bff;
+      --accent-soft: #1b2440;
+      --on-accent: #0b0e14;
+      --pass: #45cf94;
+      --pass-soft: #12291f;
+      --fail: #ff7188;
+      --fail-soft: #2c151b;
+      --warn: #e5a445;
+      --warn-soft: #2a2114;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -20px rgba(0, 0, 0, .9);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0b0e14;
+    --surface: #141924;
+    --surface-sunk: #10151f;
+    --line: #29313f;
+    --line-soft: #1f2632;
+    --ink: #e7ebf4;
+    --ink-soft: #a5aec4;
+    --ink-faint: #737d94;
+    --accent: #7e9bff;
+    --accent-soft: #1b2440;
+    --on-accent: #0b0e14;
+    --pass: #45cf94;
+    --pass-soft: #12291f;
+    --fail: #ff7188;
+    --fail-soft: #2c151b;
+    --warn: #e5a445;
+    --warn-soft: #2a2114;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -20px rgba(0, 0, 0, .9);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --ground: #eef1f7;
+    --surface: #ffffff;
+    --surface-sunk: #f5f7fb;
+    --line: #d5dbe8;
+    --line-soft: #e5e9f2;
+    --ink: #131826;
+    --ink-soft: #4d5670;
+    --ink-faint: #79839c;
+    --accent: #2748d8;
+    --accent-soft: #e7ebfd;
+    --on-accent: #ffffff;
+    --pass: #0d8055;
+    --pass-soft: #e0f3ec;
+    --fail: #c02a45;
+    --fail-soft: #fce8ec;
+    --warn: #9a5f00;
+    --warn-soft: #fbeed6;
+    --shadow: 0 1px 2px rgba(19, 24, 38, .06), 0 8px 24px -16px rgba(19, 24, 38, .35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  /* ---------- top rail ---------- */
+  .rail {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; margin-right: auto; }
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .brand h1 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .04em;
+  }
+  .brand p {
+    margin: 0;
+    font-size: 11px;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    letter-spacing: .02em;
+  }
+
+  .score { display: flex; align-items: center; gap: 10px; }
+  .meter {
+    position: relative;
+    width: 132px; height: 6px;
+    background: var(--line-soft);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .meter i {
+    position: absolute; inset: 0 auto 0 0;
+    width: 0;
+    background: var(--pass);
+    transition: width .25s ease;
+  }
+  .meter.has-fail i { background: var(--fail); }
+  .tally {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .tally b { color: var(--ink); font-weight: 600; }
+  .tally .bad { color: var(--fail); }
+
+  .clock {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 6px 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-sunk);
+  }
+  .clock time {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .02em;
+  }
+  .clock.over time { color: var(--warn); }
+  .clock button {
+    background: none; border: none; cursor: pointer;
+    color: var(--ink-faint);
+    padding: 2px 5px; border-radius: 5px;
+    font-size: 11px; font-family: var(--mono);
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+  .clock button:hover { color: var(--ink); background: var(--line-soft); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface-sunk);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: .02em;
+  }
+  .btn:hover { border-color: var(--ink-faint); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+  }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    opacity: .65;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 0 3px;
+  }
+
+  /* ---------- split ---------- */
+  .split {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+  }
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .pane-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .pane-head .spacer { margin-left: auto; }
+  .pane-head .file { color: var(--ink-soft); text-transform: none; letter-spacing: .02em; }
+  .saved { color: var(--pass); opacity: 0; transition: opacity .3s ease; text-transform: none; letter-spacing: .02em; }
+  .saved.on { opacity: 1; }
+  .ghost {
+    background: none; border: none; cursor: pointer;
+    color: var(--ink-faint);
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 3px 6px; border-radius: 5px;
+  }
+  .ghost:hover { color: var(--ink); background: var(--line-soft); }
+  .ghost[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+
+  /* ---------- editor ---------- */
+  .editor {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    background: var(--surface-sunk);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .gutter {
+    padding: 12px 8px 12px 12px;
+    text-align: right;
+    color: var(--ink-faint);
+    background: var(--surface-sunk);
+    border-right: 1px solid var(--line-soft);
+    overflow: hidden;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+    white-space: pre;
+    opacity: .7;
+  }
+  .editor textarea {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 14px;
+    border: none;
+    resize: none;
+    background: transparent;
+    tab-size: 2;
+    white-space: pre;
+    overflow: auto;
+    line-height: inherit;
+  }
+  .editor textarea:focus { outline: none; }
+
+  /* ---------- tabs ---------- */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tabs button {
+    background: none; border: none; cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+  .tabs .count {
+    font-size: 10px;
+    margin-left: 5px;
+    opacity: .8;
+    font-variant-numeric: tabular-nums;
+  }
+  .tab-body { flex: 1; overflow: auto; min-height: 0; }
+  .panel { display: none; padding: 16px 18px 28px; }
+  .panel.on { display: block; }
+
+  /* ---------- spec ---------- */
+  .spec { max-width: 62ch; }
+  .spec h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 26px 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .spec h2:first-child { margin-top: 0; }
+  .spec p { margin: 0 0 10px; color: var(--ink-soft); }
+  .spec ul { margin: 0 0 10px; padding-left: 18px; color: var(--ink-soft); }
+  .spec li { margin-bottom: 6px; }
+  .spec code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--surface-sunk);
+    border-radius: 4px;
+    padding: 1px 4px;
+    color: var(--ink);
+  }
+  .sig {
+    display: grid;
+    gap: 1px;
+    background: var(--line-soft);
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .sig div { background: var(--surface); padding: 9px 12px; }
+  .sig code { background: none; border: none; padding: 0; font-size: 12.5px; }
+  .sig span { display: block; color: var(--ink-faint); font-size: 12px; margin-top: 3px; }
+
+  /* ---------- results ---------- */
+  .suite { margin-bottom: 18px; }
+  .suite-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 6px;
+  }
+  .suite-head h3 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .04em;
+    font-weight: 600;
+  }
+  .suite-head .why { font-size: 11.5px; color: var(--ink-faint); flex: 1; }
+  .suite-head .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .case {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 6px 8px;
+    border-radius: 7px;
+    border-left: 2px solid transparent;
+  }
+  .case:hover { background: var(--surface-sunk); }
+  .case.fail { background: var(--fail-soft); border-left-color: var(--fail); }
+  .pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    padding: 2px 6px;
+    border-radius: 5px;
+    margin-top: 1px;
+  }
+  .pill.pass { background: var(--pass-soft); color: var(--pass); }
+  .pill.fail { background: var(--fail); color: var(--fail-soft); }
+  .case .name { font-size: 13px; }
+  .case .ms { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .why-fail {
+    grid-column: 2 / -1;
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fail);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .case-src {
+    grid-column: 2 / -1;
+    margin: 6px 0 2px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .case .toggle {
+    grid-column: 2 / -1;
+    justify-self: start;
+    background: none; border: none; cursor: pointer;
+    padding: 2px 0;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    opacity: 0;
+    transition: opacity .15s ease;
+  }
+  .case:hover .toggle,
+  .case:focus-within .toggle,
+  .case.fail .toggle { opacity: 1; }
+  .case .toggle:hover { color: var(--ink); }
+
+  .empty {
+    padding: 40px 18px;
+    text-align: center;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .crash {
+    padding: 12px 14px;
+    background: var(--fail-soft);
+    border: 1px solid var(--fail);
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fail);
+    white-space: pre-wrap;
+  }
+  .console-out {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--ink-soft);
+  }
+  .note {
+    margin-top: 14px;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+  }
+
+  @media (max-width: 940px) {
+    .split { grid-template-columns: minmax(0, 1fr); }
+    .pane { min-height: 62vh; }
+    .brand p { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+<style>
+  .backend {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+  .backend i {
+    width: 6px; height: 6px; border-radius: 99px;
+    background: var(--ink-faint);
+    font-style: normal;
+  }
+  .backend.ready i { background: var(--pass); }
+  .backend.busy i { background: var(--warn); }
+  .backend.down i { background: var(--fail); }
+  .btn[disabled] { opacity: .55; cursor: progress; }
+  .boot {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-sunk);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-soft);
+  }
+</style>
+
+<div class="app">
+  <header class="rail">
+    <div class="brand">
+      <span class="mark">◧</span>
+      <div>
+        <h1>GPU Credit Bench</h1>
+        <p>CreditSystem — Python design exercise</p>
+      </div>
+    </div>
+
+    <div class="score">
+      <div class="meter" id="meter"><i></i></div>
+      <div class="tally" id="tally" aria-live="polite">not run yet</div>
+    </div>
+
+    <span class="backend" id="backend"><i></i><span id="backend-label">starting</span></span>
+
+    <div class="clock" id="clock">
+      <time id="elapsed">00:00</time>
+      <button id="clock-toggle" type="button">start</button>
+      <button id="clock-reset" type="button">reset</button>
+    </div>
+
+    <button class="btn primary" id="run" type="button">Run tests <kbd>⌘⏎</kbd></button>
+  </header>
+
+  <main class="split">
+    <section class="pane">
+      <div class="pane-head">
+        <span class="file">solution.py</span>
+        <span class="saved" id="saved">saved</span>
+        <span class="spacer"></span>
+        <button class="ghost" id="reset-code" type="button">reset to stub</button>
+      </div>
+      <div class="editor">
+        <div class="gutter" id="gutter">1</div>
+        <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Your solution"></textarea>
+      </div>
+    </section>
+
+    <section class="pane">
+      <nav class="tabs" role="tablist">
+        <button role="tab" id="tab-spec" aria-selected="true" aria-controls="panel-spec" type="button">Spec</button>
+        <button role="tab" id="tab-results" aria-selected="false" aria-controls="panel-results" type="button">
+          Results<span class="count" id="tab-count"></span>
+        </button>
+        <button role="tab" id="tab-console" aria-selected="false" aria-controls="panel-console" type="button">Output</button>
+        <span class="spacer" style="margin-left:auto"></span>
+        <button class="ghost" id="only-failing" type="button" aria-pressed="false">failing only</button>
+        <button class="ghost" id="skip-scale" type="button" aria-pressed="false">skip scale</button>
+      </nav>
+      <div class="tab-body">
+        <div class="panel on" id="panel-spec" role="tabpanel" aria-labelledby="tab-spec">
+          <div class="spec">
+            <h2>Problem</h2>
+            <p>
+              Design a system that manages GPU credits. Each credit grant has a unique id and is valid
+              during a specific time window. Grants may overlap in time.
+            </p>
+            <p>
+              Because of network delays, events may arrive and be processed out of order with respect to
+              their timestamp. At any point you may be asked for the total available credits at a given
+              timestamp, or asked to consume credits at a given time.
+            </p>
+
+            <h2>Interface</h2>
+            <div class="sig">
+              <div>
+                <code>CreditSystem()</code>
+                <span>Initializes the credit system.</span>
+              </div>
+              <div>
+                <code>add_grant(grant_id, amount, start_time, end_time) -> None</code>
+                <span>Registers a grant of <code>amount</code> credits valid on <code>[start_time, end_time)</code>.</span>
+              </div>
+              <div>
+                <code>get_available_credits(timestamp) -> int</code>
+                <span>Returns the total credits available at <code>timestamp</code>.</span>
+              </div>
+              <div>
+                <code>consume_credits(timestamp, amount) -> bool</code>
+                <span>Attempts to consume <code>amount</code> credits at <code>timestamp</code>.</span>
+              </div>
+            </div>
+
+            <h2>Rules</h2>
+            <ul>
+              <li>A grant is active at <code>t</code> when <code>start_time &lt;= t &lt; end_time</code>.</li>
+              <li>Calls may arrive in any order relative to their timestamps. Every answer must reflect all
+                  events accepted so far, replayed in timestamp order. Two events with the same timestamp
+                  replay in arrival order.</li>
+              <li><code>get_available_credits(t)</code> is the unconsumed total of the grants active at
+                  <code>t</code>, counting only consumptions whose timestamp is <code>&lt;= t</code>.</li>
+              <li>A consumption draws from the active grants in order of soonest expiry first; ties break on
+                  the smaller <code>grant_id</code>.</li>
+              <li>A consumption is accepted only if, after the replay, it and every previously accepted
+                  consumption are still fully satisfied. Otherwise it returns <code>False</code>, changes
+                  nothing, and is discarded — it is never retried.</li>
+              <li>Once accepted, a consumption is never revoked.</li>
+              <li>Consuming <code>0</code> always succeeds. Grant ids are unique, amounts are non-negative
+                  integers, timestamps are integers and may be negative.</li>
+            </ul>
+
+            <h2>Working here</h2>
+            <ul>
+              <li>Write Python 3. Your file must define a top-level <code>class CreditSystem</code>.</li>
+              <li><code>⌘/Ctrl + Enter</code> runs the suite. Your code autosaves to this browser.</li>
+              <li><code>print()</code> from your code shows up in the <b>Output</b> tab.</li>
+              <li>The scale case has a 5s budget; correctness is graded separately from speed.</li>
+              <li>The same suite runs headless: <code>pytest interview/gpu-credits/python</code>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-results" role="tabpanel" aria-labelledby="tab-results">
+          <div class="empty">No run yet. Press Run tests.</div>
+        </div>
+
+        <div class="panel" id="panel-console" role="tabpanel" aria-labelledby="tab-console">
+          <div class="empty">print() output from your last run appears here.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script type="text/x-python" id="test-suite">"""GPU Credit System — test suite.
+
+Single source of truth for every runner: pytest, the terminal runner in this
+file, and the browser bench (bench.py / bench.html).
+
+    pytest interview/gpu-credits/python
+    python3 interview/gpu-credits/python/test_credit_system.py [solution.py]
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import inspect
+import io
+import linecache
+import json
+import os
+import sys
+import time
+import traceback
+from contextlib import redirect_stdout
+from dataclasses import dataclass, field
+from typing import Any, Callable, List, Optional
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+# --------------------------------------------------------------------------
+# harness
+# --------------------------------------------------------------------------
+
+class CheckFailed(AssertionError):
+    """One assertion inside a case did not hold."""
+
+    def __init__(self, label: str, actual: Any, expected: Any):
+        super().__init__(f"{label}\n  expected: {expected!r}\n  actual:   {actual!r}")
+        self.label = label
+        self.actual = actual
+        self.expected = expected
+
+
+class Harness:
+    """What every case is handed: a factory plus three checks."""
+
+    def __init__(self, credit_system: type):
+        self.credit_system = credit_system
+
+    def new(self):
+        """A fresh CreditSystem."""
+        return self.credit_system()
+
+    def eq(self, actual, expected, label):
+        if actual != expected:
+            raise CheckFailed(label, actual, expected)
+
+    def ok(self, actual, label):
+        if bool(actual) is not True:
+            raise CheckFailed(label, actual, True)
+
+    def no(self, actual, label):
+        if bool(actual) is not False:
+            raise CheckFailed(label, actual, False)
+
+
+@dataclass
+class Case:
+    name: str
+    fn: Callable[[Harness], None]
+    budget_ms: Optional[int] = None
+
+
+@dataclass
+class Suite:
+    name: str
+    why: str
+    optional: bool = False
+    cases: List[Case] = field(default_factory=list)
+
+    def case(self, name: str, budget_ms: Optional[int] = None):
+        def register(fn):
+            self.cases.append(Case(name, fn, budget_ms))
+            return fn
+
+        return register
+
+
+SUITES: List[Suite] = []
+
+
+def suite(name: str, why: str, optional: bool = False) -> Suite:
+    s = Suite(name, why, optional)
+    SUITES.append(s)
+    return s
+
+
+# --------------------------------------------------------------------------
+# grants and queries
+# --------------------------------------------------------------------------
+
+grants = suite("Grants and queries", "A grant contributes to the balance only inside its own window.")
+
+
+@grants.case("empty system reports zero at any time")
+def _(h):
+    s = h.new()
+    h.eq(s.get_available_credits(0), 0, "balance at 0")
+    h.eq(s.get_available_credits(-50), 0, "balance at -50")
+    h.eq(s.get_available_credits(10**9), 0, "balance at 1e9")
+
+
+@grants.case("single grant is active on [start, end)")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 10, 20)
+    h.eq(s.get_available_credits(9), 0, "before start")
+    h.eq(s.get_available_credits(10), 100, "at start")
+    h.eq(s.get_available_credits(19), 100, "last active tick")
+    h.eq(s.get_available_credits(20), 0, "at end (exclusive)")
+    h.eq(s.get_available_credits(21), 0, "after end")
+
+
+@grants.case("overlapping grants add up")
+def _(h):
+    s = h.new()
+    s.add_grant("a", 100, 0, 10)
+    s.add_grant("b", 50, 5, 20)
+    h.eq(s.get_available_credits(4), 100, "only a active")
+    h.eq(s.get_available_credits(5), 150, "both active")
+    h.eq(s.get_available_credits(9), 150, "both active")
+    h.eq(s.get_available_credits(10), 50, "only b active")
+    h.eq(s.get_available_credits(19), 50, "only b active")
+    h.eq(s.get_available_credits(20), 0, "none active")
+
+
+@grants.case("grants added out of chronological order")
+def _(h):
+    s = h.new()
+    s.add_grant("late", 10, 100, 200)
+    s.add_grant("early", 20, 0, 50)
+    s.add_grant("middle", 30, 40, 120)
+    h.eq(s.get_available_credits(10), 20, "early only")
+    h.eq(s.get_available_credits(45), 50, "early + middle")
+    h.eq(s.get_available_credits(60), 30, "middle only")
+    h.eq(s.get_available_credits(110), 40, "middle + late")
+    h.eq(s.get_available_credits(150), 10, "late only")
+    h.eq(s.get_available_credits(250), 0, "nothing left")
+
+
+@grants.case("empty window is never active")
+def _(h):
+    s = h.new()
+    s.add_grant("zero", 100, 5, 5)
+    h.eq(s.get_available_credits(4), 0, "before")
+    h.eq(s.get_available_credits(5), 0, "at start == end")
+    h.eq(s.get_available_credits(6), 0, "after")
+
+
+# --------------------------------------------------------------------------
+# consuming credits
+# --------------------------------------------------------------------------
+
+consuming = suite("Consuming credits", "A consumption succeeds only if the credits are available at that timestamp.")
+
+
+@consuming.case("successful consumption reduces the balance from that time on")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 0, 10)
+    h.ok(s.consume_credits(5, 30), "consume 30 at t=5")
+    h.eq(s.get_available_credits(5), 70, "balance at consume time")
+    h.eq(s.get_available_credits(9), 70, "balance after consume time")
+    h.eq(s.get_available_credits(10), 0, "grant expired")
+
+
+@consuming.case("a consumption does not affect earlier timestamps")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 0, 10)
+    h.ok(s.consume_credits(5, 30), "consume 30 at t=5")
+    h.eq(s.get_available_credits(0), 100, "balance at t=0")
+    h.eq(s.get_available_credits(4), 100, "balance just before the consumption")
+    h.eq(s.get_available_credits(5), 70, "balance at consume time")
+
+
+@consuming.case("repeated consumptions accumulate")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 0, 100)
+    h.ok(s.consume_credits(10, 40), "consume 40 at t=10")
+    h.ok(s.consume_credits(20, 25), "consume 25 at t=20")
+    h.ok(s.consume_credits(30, 35), "consume 35 at t=30")
+    h.eq(s.get_available_credits(9), 100, "before any consumption")
+    h.eq(s.get_available_credits(10), 60, "after the first")
+    h.eq(s.get_available_credits(20), 35, "after the second")
+    h.eq(s.get_available_credits(30), 0, "after the third")
+    h.eq(s.get_available_credits(99), 0, "still drained")
+
+
+@consuming.case("consumption spanning several active grants")
+def _(h):
+    s = h.new()
+    s.add_grant("a", 40, 0, 50)
+    s.add_grant("b", 60, 0, 50)
+    h.ok(s.consume_credits(10, 90), "consume 90 at t=10")
+    h.eq(s.get_available_credits(10), 10, "remainder")
+    h.eq(s.get_available_credits(9), 100, "untouched before")
+
+
+@consuming.case("consumption of more than available is refused and changes nothing")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 0, 10)
+    h.no(s.consume_credits(5, 101), "consume 101 at t=5")
+    h.eq(s.get_available_credits(5), 100, "balance untouched")
+    h.eq(s.get_available_credits(0), 100, "balance untouched at start")
+
+
+@consuming.case("consumption outside every window is refused")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 10, 20)
+    h.no(s.consume_credits(9, 1), "just before the window")
+    h.no(s.consume_credits(20, 1), "at the exclusive end")
+    h.no(s.consume_credits(999, 1), "far after the window")
+    h.eq(s.get_available_credits(15), 100, "balance untouched")
+
+
+@consuming.case("consumption of the exact remaining balance succeeds")
+def _(h):
+    s = h.new()
+    s.add_grant("a", 30, 0, 10)
+    s.add_grant("b", 70, 0, 10)
+    h.ok(s.consume_credits(5, 100), "consume all 100")
+    h.eq(s.get_available_credits(5), 0, "drained")
+    h.no(s.consume_credits(6, 1), "nothing left")
+
+
+# --------------------------------------------------------------------------
+# allocation policy
+# --------------------------------------------------------------------------
+
+allocation = suite("Allocation policy", "Credits are drawn from the soonest-expiring active grant first.")
+
+
+@allocation.case("soonest-expiring grant is drained first")
+def _(h):
+    s = h.new()
+    s.add_grant("long", 100, 0, 100)
+    s.add_grant("short", 100, 0, 20)
+    h.ok(s.consume_credits(5, 100), "consume 100 at t=5")
+    h.eq(s.get_available_credits(5), 100, "half the pool is gone")
+    h.eq(s.get_available_credits(19), 100, "still one grant standing")
+    h.eq(s.get_available_credits(20), 100, "short grant expired, long one intact")
+    h.eq(s.get_available_credits(99), 100, "long grant untouched")
+
+
+@allocation.case("overflow spills into the later-expiring grant")
+def _(h):
+    s = h.new()
+    s.add_grant("long", 100, 0, 100)
+    s.add_grant("short", 100, 0, 20)
+    h.ok(s.consume_credits(5, 130), "consume 130 at t=5")
+    h.eq(s.get_available_credits(5), 70, "remaining across both")
+    h.eq(s.get_available_credits(20), 70, "short expired, long keeps 70")
+    h.eq(s.get_available_credits(99), 70, "long grant balance")
+
+
+@allocation.case("expiry order wins over grant start order")
+def _(h):
+    s = h.new()
+    s.add_grant("first", 50, 0, 90)
+    s.add_grant("second", 50, 10, 30)
+    h.ok(s.consume_credits(20, 50), "consume 50 at t=20")
+    h.eq(s.get_available_credits(20), 50, "half the pool is gone")
+    h.eq(s.get_available_credits(30), 50, "second expired, first intact")
+    h.eq(s.get_available_credits(89), 50, "first still full")
+
+
+@allocation.case("three-deep expiry ladder")
+def _(h):
+    s = h.new()
+    s.add_grant("c", 10, 0, 300)
+    s.add_grant("a", 10, 0, 100)
+    s.add_grant("b", 10, 0, 200)
+    h.ok(s.consume_credits(1, 15), "consume 15 at t=1")
+    h.eq(s.get_available_credits(1), 15, "total remaining")
+    h.eq(s.get_available_credits(100), 15, "a expired but was already empty")
+    h.eq(s.get_available_credits(200), 10, "b expired holding 5")
+    h.eq(s.get_available_credits(299), 10, "c untouched")
+
+
+# --------------------------------------------------------------------------
+# out-of-order arrivals
+# --------------------------------------------------------------------------
+
+late = suite(
+    "Out-of-order arrivals",
+    "State always reflects the events processed so far, replayed in timestamp order.",
+)
+
+
+@late.case("a grant arriving after a query is still visible in the past")
+def _(h):
+    s = h.new()
+    h.eq(s.get_available_credits(5), 0, "nothing known yet")
+    s.add_grant("g1", 100, 0, 10)
+    h.eq(s.get_available_credits(5), 100, "grant now known")
+
+
+@late.case("a late consumption re-routes an earlier allocation")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 0, 10)
+    s.add_grant("g2", 100, 0, 50)
+    h.ok(s.consume_credits(20, 100), "consume 100 at t=20")
+    h.eq(s.get_available_credits(20), 0, "g2 drained")
+    h.eq(s.get_available_credits(5), 200, "both grants intact at t=5")
+
+    h.ok(s.consume_credits(5, 100), "late consumption of 100 at t=5")
+    h.eq(s.get_available_credits(4), 200, "before both consumptions")
+    h.eq(s.get_available_credits(5), 100, "after the t=5 consumption")
+    h.eq(s.get_available_credits(9), 100, "g1 empty, g2 not yet consumed")
+    h.eq(s.get_available_credits(10), 100, "g1 expired, g2 still full")
+    h.eq(s.get_available_credits(20), 0, "g2 consumed at t=20")
+    h.eq(s.get_available_credits(49), 0, "still drained")
+
+
+@late.case("a late grant funds an already-accepted consumption")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 60, 0, 100)
+    h.ok(s.consume_credits(50, 60), "consume 60 at t=50")
+    h.eq(s.get_available_credits(50), 0, "drained")
+    s.add_grant("g2", 40, 0, 100)
+    h.eq(s.get_available_credits(49), 100, "both grants visible before the consumption")
+    h.eq(s.get_available_credits(50), 40, "g2 covers the rest")
+
+
+@late.case("interleaved out-of-order consumptions")
+def _(h):
+    s = h.new()
+    s.add_grant("a", 50, 0, 40)
+    s.add_grant("b", 50, 20, 80)
+    h.ok(s.consume_credits(30, 20), "consume 20 at t=30")
+    h.ok(s.consume_credits(10, 20), "late consumption of 20 at t=10")
+    h.ok(s.consume_credits(25, 20), "late consumption of 20 at t=25")
+    h.eq(s.get_available_credits(9), 50, "only a active, untouched")
+    h.eq(s.get_available_credits(10), 30, "a after the t=10 consumption")
+    h.eq(s.get_available_credits(20), 80, "b joins the pool")
+    h.eq(s.get_available_credits(25), 60, "after the t=25 consumption")
+    h.eq(s.get_available_credits(30), 40, "after the t=30 consumption")
+    h.eq(s.get_available_credits(40), 40, "a expired empty, b holds the rest")
+    h.eq(s.get_available_credits(79), 40, "b balance")
+    h.eq(s.get_available_credits(80), 0, "b expired")
+
+
+@late.case("consumptions arriving in reverse order")
+def _(h):
+    s = h.new()
+    s.add_grant("g", 100, 0, 100)
+    h.ok(s.consume_credits(80, 25), "consume at t=80")
+    h.ok(s.consume_credits(60, 25), "consume at t=60")
+    h.ok(s.consume_credits(40, 25), "consume at t=40")
+    h.ok(s.consume_credits(20, 25), "consume at t=20")
+    h.eq(s.get_available_credits(19), 100, "before all")
+    h.eq(s.get_available_credits(20), 75, "one applied")
+    h.eq(s.get_available_credits(40), 50, "two applied")
+    h.eq(s.get_available_credits(60), 25, "three applied")
+    h.eq(s.get_available_credits(80), 0, "four applied")
+
+
+# --------------------------------------------------------------------------
+# refusals and atomicity
+# --------------------------------------------------------------------------
+
+refusals = suite(
+    "Refusals and atomicity",
+    "A consumption is accepted only if every accepted consumption still holds after the replay.",
+)
+
+
+@refusals.case("a late consumption that would starve an accepted one is refused")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 0, 10)
+    h.ok(s.consume_credits(8, 60), "consume 60 at t=8")
+    h.no(s.consume_credits(2, 60), "late consumption of 60 at t=2 would starve it")
+    h.eq(s.get_available_credits(2), 100, "state untouched at t=2")
+    h.eq(s.get_available_credits(8), 40, "state untouched at t=8")
+
+
+@refusals.case("a late consumption that fits is accepted")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 0, 10)
+    h.ok(s.consume_credits(8, 60), "consume 60 at t=8")
+    h.ok(s.consume_credits(2, 40), "late consumption of 40 at t=2 still fits")
+    h.eq(s.get_available_credits(1), 100, "before both")
+    h.eq(s.get_available_credits(2), 60, "after the t=2 consumption")
+    h.eq(s.get_available_credits(8), 0, "after both")
+
+
+@refusals.case("a refused consumption is dropped, not retried")
+def _(h):
+    s = h.new()
+    h.no(s.consume_credits(5, 80), "no grants yet")
+    s.add_grant("g1", 100, 0, 10)
+    h.eq(s.get_available_credits(5), 100, "a refused consumption never applies")
+
+
+@refusals.case("a refused consumption leaves later requests unaffected")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 50, 0, 10)
+    h.no(s.consume_credits(5, 80), "too large")
+    h.ok(s.consume_credits(5, 50), "exactly available")
+    h.eq(s.get_available_credits(5), 0, "drained once, not twice")
+
+
+@refusals.case("expiry window is respected across a late consumption")
+def _(h):
+    s = h.new()
+    s.add_grant("early", 50, 0, 20)
+    s.add_grant("late", 50, 20, 40)
+    h.ok(s.consume_credits(30, 50), "drain the late grant")
+    h.no(s.consume_credits(10, 60), "the early grant only holds 50")
+    h.ok(s.consume_credits(10, 50), "the early grant exactly covers it")
+    h.eq(s.get_available_credits(10), 0, "early drained")
+    h.eq(s.get_available_credits(25), 50, "late grant not yet consumed")
+    h.eq(s.get_available_credits(30), 0, "late drained")
+
+
+# --------------------------------------------------------------------------
+# edge cases
+# --------------------------------------------------------------------------
+
+edges = suite("Edge cases", "Boundaries, zero amounts, and odd-but-legal inputs.")
+
+
+@edges.case("consuming zero always succeeds and changes nothing")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 10, 0, 10)
+    h.ok(s.consume_credits(5, 0), "zero inside a window")
+    h.ok(s.consume_credits(500, 0), "zero outside every window")
+    h.eq(s.get_available_credits(5), 10, "balance untouched")
+
+
+@edges.case("a zero-amount grant is legal")
+def _(h):
+    s = h.new()
+    s.add_grant("empty", 0, 0, 10)
+    h.eq(s.get_available_credits(5), 0, "contributes nothing")
+    h.no(s.consume_credits(5, 1), "cannot draw from it")
+    h.ok(s.consume_credits(5, 0), "a zero draw is fine")
+
+
+@edges.case("consumption exactly at a grant boundary")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 100, 10, 20)
+    h.no(s.consume_credits(20, 10), "the end is exclusive")
+    h.ok(s.consume_credits(10, 10), "the start is inclusive")
+    h.eq(s.get_available_credits(10), 90, "start-time consumption applied")
+
+
+@edges.case("negative and large timestamps")
+def _(h):
+    s = h.new()
+    s.add_grant("g1", 1000, -1000, 1000)
+    s.add_grant("g2", 1000, 0, 10**12)
+    h.eq(s.get_available_credits(-999), 1000, "only g1 active")
+    h.ok(s.consume_credits(-500, 1000), "consume in negative time")
+    h.eq(s.get_available_credits(-500), 0, "g1 drained, g2 not active")
+    h.eq(s.get_available_credits(0), 1000, "g2 active and full")
+    h.eq(s.get_available_credits(10**11), 1000, "g2 still active")
+
+
+@edges.case("grants sharing identical windows")
+def _(h):
+    s = h.new()
+    for gid in ("a", "b", "c", "d"):
+        s.add_grant(gid, 25, 0, 10)
+    h.ok(s.consume_credits(3, 70), "consume 70 at t=3")
+    h.eq(s.get_available_credits(3), 30, "remaining")
+    h.eq(s.get_available_credits(2), 100, "before the consumption")
+
+
+@edges.case("many small consumptions against one long grant")
+def _(h):
+    s = h.new()
+    s.add_grant("g", 100, 0, 1000)
+    for i in range(100):
+        h.ok(s.consume_credits(i, 1), f"consumption #{i}")
+    h.eq(s.get_available_credits(0), 99, "after the first")
+    h.eq(s.get_available_credits(49), 50, "halfway")
+    h.eq(s.get_available_credits(99), 0, "drained")
+    h.no(s.consume_credits(500, 1), "nothing left")
+
+
+# --------------------------------------------------------------------------
+# scale
+# --------------------------------------------------------------------------
+
+scale = suite(
+    "Scale",
+    "Should stay responsive as the event log grows. Slow but correct still passes correctness.",
+    optional=True,
+)
+
+
+@scale.case("1000 grants and 1000 shuffled consumptions finish under 5s", budget_ms=5000)
+def _(h):
+    n = 1000
+    s = h.new()
+    for i in range(n):
+        s.add_grant(f"g{i}", 10, i, i + 5)
+    # deterministic shuffle of the timestamps 0..n-1
+    order = [(i * 977) % n for i in range(n)]
+    for t in order:
+        h.ok(s.consume_credits(t, 5), f"consume at t={t}")
+    h.eq(s.get_available_credits(0), 5, "first window")
+    h.eq(s.get_available_credits(n - 1), 45, "last window")
+    h.eq(s.get_available_credits(n + 10), 0, "past every window")
+
+
+# --------------------------------------------------------------------------
+# running
+# --------------------------------------------------------------------------
+
+def load_credit_system_from_path(path: str) -> type:
+    """Import CreditSystem out of a .py file."""
+    spec = importlib.util.spec_from_file_location("candidate_solution", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot import {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve annotations through sys.modules
+    spec.loader.exec_module(module)
+    if not hasattr(module, "CreditSystem"):
+        raise ImportError(f"{os.path.basename(path)} does not define a class named CreditSystem")
+    return module.CreditSystem
+
+
+def load_credit_system_from_source(source: str) -> type:
+    """Exec a snippet of code and pull CreditSystem out of it."""
+    # registering the source makes tracebacks quote the offending line
+    linecache.cache["<solution>"] = (len(source), None, source.splitlines(True), "<solution>")
+    namespace: dict = {"__name__": "candidate_solution"}
+    exec(compile(source, "<solution>", "exec"), namespace)
+    if "CreditSystem" not in namespace:
+        raise ImportError("no class named CreditSystem was found in your code")
+    return namespace["CreditSystem"]
+
+
+def format_user_error(err: BaseException) -> str:
+    """Traceback trimmed to the frames inside the candidate's own code."""
+    if isinstance(err, SyntaxError):
+        return "".join(traceback.format_exception_only(type(err), err)).strip()
+    frames = [f for f in traceback.extract_tb(err.__traceback__) if f.filename == "<solution>"]
+    lines = traceback.format_list(frames) if frames else []
+    lines += traceback.format_exception_only(type(err), err)
+    return "".join(lines).strip()
+
+
+def run_case(credit_system: type, case: Case) -> dict:
+    started = time.perf_counter()
+    error = None
+    try:
+        case.fn(Harness(credit_system))
+    except CheckFailed as failure:
+        error = str(failure)
+    except Exception as err:  # anything raised by the candidate's code
+        error = format_user_error(err)
+    ms = (time.perf_counter() - started) * 1000
+    if error is None and case.budget_ms and ms > case.budget_ms:
+        error = f"over budget\n  budget:   {case.budget_ms}ms\n  actual:   {ms:.0f}ms"
+    try:
+        source = inspect.getsource(case.fn)
+    except (OSError, TypeError):  # source is unavailable when exec'd from a string
+        source = ""
+    return {
+        "name": case.name,
+        "ms": ms,
+        "timed": case.budget_ms is not None,
+        "error": error,
+        "source": source,
+    }
+
+
+def run_all(source: str, skip_optional: bool = False) -> str:
+    """Run every suite against `source`. Returns a JSON string — used by the bench."""
+    captured = io.StringIO()
+    try:
+        with redirect_stdout(captured):
+            credit_system = load_credit_system_from_source(source)
+    except Exception as err:
+        return json.dumps({"crash": format_user_error(err)})
+
+    report = {"suites": [], "passed": 0, "failed": 0, "logs": ""}
+    with redirect_stdout(captured):
+        for s in SUITES:
+            if s.optional and skip_optional:
+                continue
+            entry = {"name": s.name, "why": s.why, "cases": []}
+            for case in s.cases:
+                result = run_case(credit_system, case)
+                report["failed" if result["error"] else "passed"] += 1
+                entry["cases"].append(result)
+            report["suites"].append(entry)
+    report["logs"] = captured.getvalue()
+    return json.dumps(report)
+
+
+# --------------------------------------------------------------------------
+# pytest entry point — `pytest interview/gpu-credits/python`
+# --------------------------------------------------------------------------
+
+try:
+    import pytest
+except ImportError:  # pytest is optional; the terminal runner below needs nothing
+    pytest = None
+
+if pytest is not None:
+    _ALL = [(s, c) for s in SUITES for c in s.cases]
+
+    @pytest.fixture(scope="session")
+    def credit_system():
+        path = os.environ.get("CREDIT_SOLUTION", os.path.join(HERE, "solution.py"))
+        return load_credit_system_from_path(path)
+
+    @pytest.mark.parametrize(
+        "suite_obj,case",
+        _ALL,
+        ids=[f"{s.name} :: {c.name}" for s, c in _ALL],
+    )
+    def test_credit_system(credit_system, suite_obj, case):
+        if case.budget_ms:
+            started = time.perf_counter()
+            case.fn(Harness(credit_system))
+            ms = (time.perf_counter() - started) * 1000
+            assert ms <= case.budget_ms, f"took {ms:.0f}ms, budget is {case.budget_ms}ms"
+        else:
+            case.fn(Harness(credit_system))
+
+
+# --------------------------------------------------------------------------
+# terminal runner — `python3 test_credit_system.py [solution.py]`
+# --------------------------------------------------------------------------
+
+def _main(argv: List[str]) -> int:
+    args = [a for a in argv if not a.startswith("--")]
+    skip_optional = "--skip-optional" in argv
+    path = args[0] if args else os.path.join(HERE, "solution.py")
+
+    try:
+        credit_system = load_credit_system_from_path(path)
+    except Exception as err:
+        print(f"Could not load {path}: {err}")
+        return 2
+
+    color = sys.stdout.isatty()
+    dim = (lambda t: f"\033[2m{t}\033[0m") if color else (lambda t: t)
+    green = (lambda t: f"\033[32m{t}\033[0m") if color else (lambda t: t)
+    red = (lambda t: f"\033[31m{t}\033[0m") if color else (lambda t: t)
+    bold = (lambda t: f"\033[1m{t}\033[0m") if color else (lambda t: t)
+
+    passed = failed = 0
+    for s in SUITES:
+        if s.optional and skip_optional:
+            continue
+        print(f"\n{bold(s.name)} {dim('— ' + s.why)}")
+        for case in s.cases:
+            result = run_case(credit_system, case)
+            if result["error"]:
+                failed += 1
+                print(f"  {red('FAIL')} {case.name}")
+                for line in result["error"].splitlines():
+                    print(f"       {line}")
+            else:
+                passed += 1
+                timing = dim(f" ({result['ms']:.0f}ms)") if case.budget_ms else ""
+                print(f"  {green('PASS')} {case.name}{timing}")
+
+    print(f"\n{passed} passed, {failed} failed\n")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main(sys.argv[1:]))
+</script>
+<script>
+(function () {
+  "use strict";
+
+  var STUB = [
+    "class CreditSystem:",
+    "    def __init__(self):",
+    '        """Initializes the credit system."""',
+    "        # your state here",
+    "",
+    "    def add_grant(self, grant_id: str, amount: int, start_time: int, end_time: int) -> None:",
+    '        """Register a grant of `amount` credits valid on [start_time, end_time)."""',
+    "        # TODO",
+    "",
+    "    def get_available_credits(self, timestamp: int) -> int:",
+    '        """Total credits available at `timestamp`."""',
+    "        # TODO",
+    "        return 0",
+    "",
+    "    def consume_credits(self, timestamp: int, amount: int) -> bool:",
+    '        """Attempt to consume `amount` credits at `timestamp`."""',
+    "        # TODO",
+    "        return False",
+    ""
+  ].join("\n");
+
+  var INDENT = "    ";
+  var STORE_CODE = "gpu-credit-bench-py:code";
+  var STORE_CLOCK = "gpu-credit-bench-py:clock";
+  var PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var code = $("code");
+  var gutter = $("gutter");
+  var savedFlag = $("saved");
+  var meter = $("meter");
+  var tally = $("tally");
+  var tabCount = $("tab-count");
+  var results = $("panel-results");
+  var consolePanel = $("panel-console");
+  var backendChip = $("backend");
+  var backendLabel = $("backend-label");
+  var runButton = $("run");
+
+  /* ---------- editor ---------- */
+  function load() {
+    var stored = null;
+    try { stored = localStorage.getItem(STORE_CODE); } catch (e) {}
+    code.value = stored != null && stored !== "" ? stored : STUB;
+    syncGutter();
+  }
+
+  function syncGutter() {
+    var lines = code.value.split("\n").length;
+    var out = [];
+    for (var i = 1; i <= lines; i++) out.push(i);
+    gutter.textContent = out.join("\n");
+    gutter.scrollTop = code.scrollTop;
+  }
+
+  var saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(STORE_CODE, code.value); } catch (e) {}
+      savedFlag.classList.add("on");
+      setTimeout(function () { savedFlag.classList.remove("on"); }, 900);
+    }, 400);
+  }
+
+  code.addEventListener("input", function () {
+    syncGutter();
+    scheduleSave();
+    if (!clock.running && clock.elapsed === 0) startClock();
+  });
+  code.addEventListener("scroll", function () { gutter.scrollTop = code.scrollTop; });
+
+  code.addEventListener("keydown", function (e) {
+    var start = code.selectionStart;
+    var end = code.selectionEnd;
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      var value = code.value;
+      if (start !== end && value.slice(start, end).indexOf("\n") !== -1) {
+        var from = value.lastIndexOf("\n", start - 1) + 1;
+        var block = value.slice(from, end);
+        var shifted = e.shiftKey
+          ? block.replace(new RegExp("^ {1," + INDENT.length + "}", "gm"), "")
+          : block.replace(/^/gm, INDENT);
+        code.value = value.slice(0, from) + shifted + value.slice(end);
+        code.selectionStart = from;
+        code.selectionEnd = from + shifted.length;
+      } else if (e.shiftKey) {
+        var lineStart = value.lastIndexOf("\n", start - 1) + 1;
+        if (value.slice(lineStart, lineStart + INDENT.length) === INDENT) {
+          code.value = value.slice(0, lineStart) + value.slice(lineStart + INDENT.length);
+          code.selectionStart = code.selectionEnd = Math.max(lineStart, start - INDENT.length);
+        }
+      } else {
+        code.value = value.slice(0, start) + INDENT + value.slice(end);
+        code.selectionStart = code.selectionEnd = start + INDENT.length;
+      }
+      syncGutter();
+      scheduleSave();
+      return;
+    }
+
+    if (e.key === "Enter") {
+      var val = code.value;
+      var lineFrom = val.lastIndexOf("\n", start - 1) + 1;
+      var line = val.slice(lineFrom, start);
+      var indent = (line.match(/^\s*/) || [""])[0];
+      if (/:\s*$/.test(line) || /[([{]\s*$/.test(line)) indent += INDENT;
+      if (indent) {
+        e.preventDefault();
+        var insert = "\n" + indent;
+        code.value = val.slice(0, start) + insert + val.slice(end);
+        code.selectionStart = code.selectionEnd = start + insert.length;
+        syncGutter();
+        scheduleSave();
+      }
+      return;
+    }
+
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      scheduleSave();
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      run();
+    }
+  });
+
+  $("reset-code").addEventListener("click", function () {
+    if (!confirm("Replace the editor contents with the empty stub?")) return;
+    code.value = STUB;
+    syncGutter();
+    scheduleSave();
+    code.focus();
+  });
+
+  /* ---------- clock ---------- */
+  var clock = { running: false, elapsed: 0, since: 0 };
+  var TARGET = 45 * 60 * 1000;
+
+  try {
+    var raw = localStorage.getItem(STORE_CLOCK);
+    if (raw) clock.elapsed = JSON.parse(raw).elapsed || 0;
+  } catch (e) {}
+
+  function fmt(ms) {
+    var total = Math.floor(ms / 1000);
+    var m = Math.floor(total / 60);
+    var s = total % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function tick() {
+    var ms = clock.elapsed + (clock.running ? Date.now() - clock.since : 0);
+    $("elapsed").textContent = fmt(ms);
+    $("clock").classList.toggle("over", ms > TARGET);
+  }
+
+  function startClock() {
+    clock.running = true;
+    clock.since = Date.now();
+    $("clock-toggle").textContent = "pause";
+  }
+
+  function stopClock() {
+    clock.elapsed += Date.now() - clock.since;
+    clock.running = false;
+    $("clock-toggle").textContent = "start";
+    try { localStorage.setItem(STORE_CLOCK, JSON.stringify({ elapsed: clock.elapsed })); } catch (e) {}
+  }
+
+  $("clock-toggle").addEventListener("click", function () {
+    if (clock.running) stopClock(); else startClock();
+    tick();
+  });
+
+  $("clock-reset").addEventListener("click", function () {
+    clock.running = false;
+    clock.elapsed = 0;
+    $("clock-toggle").textContent = "start";
+    try { localStorage.removeItem(STORE_CLOCK); } catch (e) {}
+    tick();
+  });
+
+  setInterval(function () {
+    tick();
+    if (clock.running) {
+      try { localStorage.setItem(STORE_CLOCK, JSON.stringify({ elapsed: clock.elapsed + (Date.now() - clock.since) })); } catch (e) {}
+    }
+  }, 1000);
+
+  /* ---------- tabs ---------- */
+  var tabs = [
+    { tab: $("tab-spec"), panel: $("panel-spec") },
+    { tab: $("tab-results"), panel: $("panel-results") },
+    { tab: $("tab-console"), panel: $("panel-console") }
+  ];
+  tabs.forEach(function (entry) {
+    entry.tab.addEventListener("click", function () { select(entry); });
+  });
+  function select(target) {
+    tabs.forEach(function (entry) {
+      var on = entry === target;
+      entry.tab.setAttribute("aria-selected", on ? "true" : "false");
+      entry.panel.classList.toggle("on", on);
+    });
+  }
+
+  var onlyFailing = false;
+  var skipScale = false;
+  var lastRun = null;
+
+  $("only-failing").addEventListener("click", function () {
+    onlyFailing = !onlyFailing;
+    this.setAttribute("aria-pressed", onlyFailing ? "true" : "false");
+    if (lastRun) render(lastRun);
+  });
+
+  $("skip-scale").addEventListener("click", function () {
+    skipScale = !skipScale;
+    this.setAttribute("aria-pressed", skipScale ? "true" : "false");
+  });
+
+  /* ---------- backends ---------- */
+  var TESTS_SOURCE = document.getElementById("test-suite").textContent;
+  var useServer = !!window.__BENCH_SERVER__;
+  var pyodide = null;
+  var booting = null;
+
+  function setBackend(state, label) {
+    backendChip.className = "backend " + state;
+    backendLabel.textContent = label;
+  }
+
+  function bootPyodide() {
+    if (booting) return booting;
+    setBackend("busy", "loading CPython (~10 MB)");
+    booting = new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = PYODIDE_URL + "pyodide.js";
+      script.onload = resolve;
+      script.onerror = function () { reject(new Error("could not reach the Pyodide CDN")); };
+      document.head.appendChild(script);
+    })
+      .then(function () { return loadPyodide({ indexURL: PYODIDE_URL }); })
+      .then(function (py) {
+        pyodide = py;
+        py.globals.set("TESTS_SOURCE", TESTS_SOURCE);
+        py.runPython([
+          "import types, sys, linecache",
+          "_mod = types.ModuleType('credit_tests')",
+          "_mod.__file__ = 'credit_tests.py'",
+          "linecache.cache['credit_tests.py'] = (len(TESTS_SOURCE), None, TESTS_SOURCE.splitlines(True), 'credit_tests.py')",
+          "sys.modules['credit_tests'] = _mod",  // dataclasses resolve annotations through sys.modules
+          "exec(compile(TESTS_SOURCE, 'credit_tests.py', 'exec'), _mod.__dict__)",
+          "run_all = _mod.run_all"
+        ].join("\n"));
+        var version = py.runPython("import sys; '.'.join(str(n) for n in sys.version_info[:2])");
+        setBackend("ready", "CPython " + version + " in browser · Pyodide " + py.version);
+        return py;
+      })
+      .catch(function (err) {
+        setBackend("down", "Python unavailable");
+        booting = null;
+        throw err;
+      });
+    return booting;
+  }
+
+  function runOnServer(source) {
+    return fetch("run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: source, skip_optional: skipScale })
+    }).then(function (res) { return res.json(); });
+  }
+
+  function runInPyodide(source) {
+    return bootPyodide().then(function (py) {
+      py.globals.set("USER_CODE", source);
+      py.globals.set("SKIP_OPTIONAL", skipScale);
+      return JSON.parse(py.runPython("run_all(USER_CODE, SKIP_OPTIONAL)"));
+    });
+  }
+
+  /* ---------- runner ---------- */
+  var running = false;
+
+  function run() {
+    if (running) return;
+    running = true;
+    runButton.disabled = true;
+    tally.textContent = "running…";
+    var backendWas = backendChip.className;
+    setBackend("busy", useServer ? "running" : backendLabel.textContent);
+
+    var source = code.value;
+    var work = useServer ? runOnServer(source) : runInPyodide(source);
+
+    work
+      .then(function (report) {
+        if (report.timeout) {
+          showCrash("Your code did not finish within " + report.timeout + "s.\nAn infinite loop, most likely.");
+          return;
+        }
+        if (report.crash) {
+          showCrash(report.crash);
+          return;
+        }
+        lastRun = report;
+        render(report);
+        select(tabs[1]);
+      })
+      .catch(function (err) {
+        showCrash("The bench could not run your code.\n\n" + (err && err.message ? err.message : String(err)));
+      })
+      .then(function () {
+        running = false;
+        runButton.disabled = false;
+        if (useServer) setBackend("ready", "CPython (local)");
+        else backendChip.className = backendWas;
+      });
+  }
+
+  function showCrash(message) {
+    results.innerHTML = "";
+    var box = document.createElement("div");
+    box.className = "crash";
+    box.textContent = message;
+    results.appendChild(box);
+    meter.classList.add("has-fail");
+    meter.firstElementChild.style.width = "100%";
+    tally.innerHTML = '<span class="bad">error</span>';
+    tabCount.textContent = "";
+    select(tabs[1]);
+  }
+
+  function render(report) {
+    var total = report.passed + report.failed;
+    meter.classList.toggle("has-fail", report.failed > 0);
+    meter.firstElementChild.style.width = total ? (report.passed / total) * 100 + "%" : "0%";
+    tally.innerHTML = report.failed
+      ? "<b>" + report.passed + "/" + total + "</b> passing · <span class=\"bad\">" + report.failed + " failing</span>"
+      : "<b>" + report.passed + "/" + total + "</b> passing";
+    tabCount.textContent = report.failed ? "· " + report.failed + " ✕" : "· " + total + " ✓";
+
+    results.innerHTML = "";
+    var shown = 0;
+
+    report.suites.forEach(function (suite) {
+      var cases = onlyFailing ? suite.cases.filter(function (c) { return c.error; }) : suite.cases;
+      if (!cases.length) return;
+      shown += cases.length;
+
+      var wrap = document.createElement("div");
+      wrap.className = "suite";
+
+      var head = document.createElement("div");
+      head.className = "suite-head";
+      var h3 = document.createElement("h3");
+      h3.textContent = suite.name;
+      var why = document.createElement("span");
+      why.className = "why";
+      why.textContent = suite.why;
+      var n = document.createElement("span");
+      n.className = "n";
+      var pass = suite.cases.filter(function (c) { return !c.error; }).length;
+      n.textContent = pass + "/" + suite.cases.length;
+      head.appendChild(h3);
+      head.appendChild(why);
+      head.appendChild(n);
+      wrap.appendChild(head);
+
+      cases.forEach(function (c) {
+        var row = document.createElement("div");
+        row.className = "case" + (c.error ? " fail" : "");
+
+        var pill = document.createElement("span");
+        pill.className = "pill " + (c.error ? "fail" : "pass");
+        pill.textContent = c.error ? "FAIL" : "PASS";
+
+        var name = document.createElement("span");
+        name.className = "name";
+        name.textContent = c.name;
+
+        var ms = document.createElement("span");
+        ms.className = "ms";
+        ms.textContent = c.timed || c.ms > 20 ? Math.round(c.ms) + "ms" : "";
+
+        row.appendChild(pill);
+        row.appendChild(name);
+        row.appendChild(ms);
+
+        if (c.error) {
+          var detail = document.createElement("div");
+          detail.className = "why-fail";
+          detail.textContent = c.error;
+          row.appendChild(detail);
+        }
+
+        if (c.source) {
+          var toggle = document.createElement("button");
+          toggle.className = "toggle";
+          toggle.type = "button";
+          toggle.textContent = "show test";
+          var src = null;
+          toggle.addEventListener("click", function () {
+            if (src) {
+              src.remove();
+              src = null;
+              toggle.textContent = "show test";
+              return;
+            }
+            src = document.createElement("pre");
+            src.className = "case-src";
+            src.textContent = c.source.replace(/\s+$/, "");
+            row.appendChild(src);
+            toggle.textContent = "hide test";
+          });
+          row.appendChild(toggle);
+        }
+
+        wrap.appendChild(row);
+      });
+
+      results.appendChild(wrap);
+    });
+
+    if (!shown) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = onlyFailing ? "Nothing failing." : "No cases ran.";
+      results.appendChild(empty);
+    }
+
+    consolePanel.innerHTML = "";
+    if (report.logs) {
+      var pre = document.createElement("pre");
+      pre.className = "console-out";
+      pre.textContent = report.logs;
+      consolePanel.appendChild(pre);
+    } else {
+      var none = document.createElement("div");
+      none.className = "empty";
+      none.textContent = "Nothing printed in the last run.";
+      consolePanel.appendChild(none);
+    }
+  }
+
+  runButton.addEventListener("click", run);
+
+  load();
+  tick();
+
+  if (useServer) {
+    setBackend("ready", "CPython (local)");
+  } else {
+    var boot = document.createElement("div");
+    boot.className = "boot";
+    boot.textContent =
+      "Running CPython in the browser through Pyodide — the runtime downloads once (~10 MB) on your first run. " +
+      "For an offline bench with your own interpreter, run: python3 bench.py";
+    $("panel-spec").insertBefore(boot, $("panel-spec").firstChild);
+    bootPyodide().catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>

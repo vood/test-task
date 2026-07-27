@@ -4,6 +4,9 @@ A practice environment for the `CreditSystem` design exercise: a spec, an empty
 interface, and 33 assertions across 7 suites. Nothing here reveals an approach —
 the tests describe behavior only.
 
+This is the JavaScript version. The same exercise in Python — pytest plus a
+browser bench that runs real CPython — is in [`python/`](python/README.md).
+
 ## In the browser
 
 Open `bench.html` (a single self-contained file — double-click works, no server,
