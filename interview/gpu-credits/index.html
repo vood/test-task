@@ -1,0 +1,1120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU Credit Bench</title>
+</head>
+<body>
+<!-- ARTIFACT:BEGIN -->
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #eef1f7;
+    --surface: #ffffff;
+    --surface-sunk: #f5f7fb;
+    --line: #d5dbe8;
+    --line-soft: #e5e9f2;
+    --ink: #131826;
+    --ink-soft: #4d5670;
+    --ink-faint: #79839c;
+    --accent: #2748d8;
+    --accent-soft: #e7ebfd;
+    --on-accent: #ffffff;
+    --pass: #0d8055;
+    --pass-soft: #e0f3ec;
+    --fail: #c02a45;
+    --fail-soft: #fce8ec;
+    --warn: #9a5f00;
+    --warn-soft: #fbeed6;
+    --shadow: 0 1px 2px rgba(19, 24, 38, .06), 0 8px 24px -16px rgba(19, 24, 38, .35);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --ground: #0b0e14;
+      --surface: #141924;
+      --surface-sunk: #10151f;
+      --line: #29313f;
+      --line-soft: #1f2632;
+      --ink: #e7ebf4;
+      --ink-soft: #a5aec4;
+      --ink-faint: #737d94;
+      --accent: #7e9bff;
+      --accent-soft: #1b2440;
+      --on-accent: #0b0e14;
+      --pass: #45cf94;
+      --pass-soft: #12291f;
+      --fail: #ff7188;
+      --fail-soft: #2c151b;
+      --warn: #e5a445;
+      --warn-soft: #2a2114;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -20px rgba(0, 0, 0, .9);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0b0e14;
+    --surface: #141924;
+    --surface-sunk: #10151f;
+    --line: #29313f;
+    --line-soft: #1f2632;
+    --ink: #e7ebf4;
+    --ink-soft: #a5aec4;
+    --ink-faint: #737d94;
+    --accent: #7e9bff;
+    --accent-soft: #1b2440;
+    --on-accent: #0b0e14;
+    --pass: #45cf94;
+    --pass-soft: #12291f;
+    --fail: #ff7188;
+    --fail-soft: #2c151b;
+    --warn: #e5a445;
+    --warn-soft: #2a2114;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -20px rgba(0, 0, 0, .9);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --ground: #eef1f7;
+    --surface: #ffffff;
+    --surface-sunk: #f5f7fb;
+    --line: #d5dbe8;
+    --line-soft: #e5e9f2;
+    --ink: #131826;
+    --ink-soft: #4d5670;
+    --ink-faint: #79839c;
+    --accent: #2748d8;
+    --accent-soft: #e7ebfd;
+    --on-accent: #ffffff;
+    --pass: #0d8055;
+    --pass-soft: #e0f3ec;
+    --fail: #c02a45;
+    --fail-soft: #fce8ec;
+    --warn: #9a5f00;
+    --warn-soft: #fbeed6;
+    --shadow: 0 1px 2px rgba(19, 24, 38, .06), 0 8px 24px -16px rgba(19, 24, 38, .35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  /* ---------- top rail ---------- */
+  .rail {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; margin-right: auto; }
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .brand h1 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .04em;
+  }
+  .brand p {
+    margin: 0;
+    font-size: 11px;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    letter-spacing: .02em;
+  }
+
+  .score { display: flex; align-items: center; gap: 10px; }
+  .meter {
+    position: relative;
+    width: 132px; height: 6px;
+    background: var(--line-soft);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .meter i {
+    position: absolute; inset: 0 auto 0 0;
+    width: 0;
+    background: var(--pass);
+    transition: width .25s ease;
+  }
+  .meter.has-fail i { background: var(--fail); }
+  .tally {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .tally b { color: var(--ink); font-weight: 600; }
+  .tally .bad { color: var(--fail); }
+
+  .clock {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 6px 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-sunk);
+  }
+  .clock time {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .02em;
+  }
+  .clock.over time { color: var(--warn); }
+  .clock button {
+    background: none; border: none; cursor: pointer;
+    color: var(--ink-faint);
+    padding: 2px 5px; border-radius: 5px;
+    font-size: 11px; font-family: var(--mono);
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+  .clock button:hover { color: var(--ink); background: var(--line-soft); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface-sunk);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: .02em;
+  }
+  .btn:hover { border-color: var(--ink-faint); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+  }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    opacity: .65;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 0 3px;
+  }
+
+  /* ---------- split ---------- */
+  .split {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+  }
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .pane-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .pane-head .spacer { margin-left: auto; }
+  .pane-head .file { color: var(--ink-soft); text-transform: none; letter-spacing: .02em; }
+  .saved { color: var(--pass); opacity: 0; transition: opacity .3s ease; text-transform: none; letter-spacing: .02em; }
+  .saved.on { opacity: 1; }
+  .ghost {
+    background: none; border: none; cursor: pointer;
+    color: var(--ink-faint);
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 3px 6px; border-radius: 5px;
+  }
+  .ghost:hover { color: var(--ink); background: var(--line-soft); }
+  .ghost[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+
+  /* ---------- editor ---------- */
+  .editor {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    background: var(--surface-sunk);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .gutter {
+    padding: 12px 8px 12px 12px;
+    text-align: right;
+    color: var(--ink-faint);
+    background: var(--surface-sunk);
+    border-right: 1px solid var(--line-soft);
+    overflow: hidden;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+    white-space: pre;
+    opacity: .7;
+  }
+  .editor textarea {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 14px;
+    border: none;
+    resize: none;
+    background: transparent;
+    tab-size: 2;
+    white-space: pre;
+    overflow: auto;
+    line-height: inherit;
+  }
+  .editor textarea:focus { outline: none; }
+
+  /* ---------- tabs ---------- */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tabs button {
+    background: none; border: none; cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+  .tabs .count {
+    font-size: 10px;
+    margin-left: 5px;
+    opacity: .8;
+    font-variant-numeric: tabular-nums;
+  }
+  .tab-body { flex: 1; overflow: auto; min-height: 0; }
+  .panel { display: none; padding: 16px 18px 28px; }
+  .panel.on { display: block; }
+
+  /* ---------- spec ---------- */
+  .spec { max-width: 62ch; }
+  .spec h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 26px 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .spec h2:first-child { margin-top: 0; }
+  .spec p { margin: 0 0 10px; color: var(--ink-soft); }
+  .spec ul { margin: 0 0 10px; padding-left: 18px; color: var(--ink-soft); }
+  .spec li { margin-bottom: 6px; }
+  .spec code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--surface-sunk);
+    border-radius: 4px;
+    padding: 1px 4px;
+    color: var(--ink);
+  }
+  .sig {
+    display: grid;
+    gap: 1px;
+    background: var(--line-soft);
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .sig div { background: var(--surface); padding: 9px 12px; }
+  .sig code { background: none; border: none; padding: 0; font-size: 12.5px; }
+  .sig span { display: block; color: var(--ink-faint); font-size: 12px; margin-top: 3px; }
+
+  /* ---------- results ---------- */
+  .suite { margin-bottom: 18px; }
+  .suite-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 6px;
+  }
+  .suite-head h3 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .04em;
+    font-weight: 600;
+  }
+  .suite-head .why { font-size: 11.5px; color: var(--ink-faint); flex: 1; }
+  .suite-head .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .case {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 6px 8px;
+    border-radius: 7px;
+    border-left: 2px solid transparent;
+  }
+  .case:hover { background: var(--surface-sunk); }
+  .case.fail { background: var(--fail-soft); border-left-color: var(--fail); }
+  .pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    padding: 2px 6px;
+    border-radius: 5px;
+    margin-top: 1px;
+  }
+  .pill.pass { background: var(--pass-soft); color: var(--pass); }
+  .pill.fail { background: var(--fail); color: var(--fail-soft); }
+  .case .name { font-size: 13px; }
+  .case .ms { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .why-fail {
+    grid-column: 2 / -1;
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fail);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .case-src {
+    grid-column: 2 / -1;
+    margin: 6px 0 2px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .case .toggle {
+    grid-column: 2 / -1;
+    justify-self: start;
+    background: none; border: none; cursor: pointer;
+    padding: 2px 0;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    opacity: 0;
+    transition: opacity .15s ease;
+  }
+  .case:hover .toggle,
+  .case:focus-within .toggle,
+  .case.fail .toggle { opacity: 1; }
+  .case .toggle:hover { color: var(--ink); }
+
+  .empty {
+    padding: 40px 18px;
+    text-align: center;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .crash {
+    padding: 12px 14px;
+    background: var(--fail-soft);
+    border: 1px solid var(--fail);
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fail);
+    white-space: pre-wrap;
+  }
+  .console-out {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--ink-soft);
+  }
+  .note {
+    margin-top: 14px;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+  }
+
+  @media (max-width: 940px) {
+    .split { grid-template-columns: minmax(0, 1fr); }
+    .pane { min-height: 62vh; }
+    .brand p { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="app">
+  <header class="rail">
+    <div class="brand">
+      <span class="mark">◧</span>
+      <div>
+        <h1>GPU Credit Bench</h1>
+        <p>CreditSystem — timed design exercise</p>
+      </div>
+    </div>
+
+    <div class="score">
+      <div class="meter" id="meter"><i></i></div>
+      <div class="tally" id="tally" aria-live="polite">not run yet</div>
+    </div>
+
+    <div class="clock" id="clock">
+      <time id="elapsed">00:00</time>
+      <button id="clock-toggle" type="button">start</button>
+      <button id="clock-reset" type="button">reset</button>
+    </div>
+
+    <button class="btn primary" id="run" type="button">Run tests <kbd>⌘⏎</kbd></button>
+  </header>
+
+  <main class="split">
+    <section class="pane">
+      <div class="pane-head">
+        <span class="file">solution.js</span>
+        <span class="saved" id="saved">saved</span>
+        <span class="spacer"></span>
+        <button class="ghost" id="reset-code" type="button">reset to stub</button>
+      </div>
+      <div class="editor">
+        <div class="gutter" id="gutter">1</div>
+        <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Your solution"></textarea>
+      </div>
+    </section>
+
+    <section class="pane">
+      <nav class="tabs" role="tablist">
+        <button role="tab" id="tab-spec" aria-selected="true" aria-controls="panel-spec" type="button">Spec</button>
+        <button role="tab" id="tab-results" aria-selected="false" aria-controls="panel-results" type="button">
+          Results<span class="count" id="tab-count"></span>
+        </button>
+        <button role="tab" id="tab-console" aria-selected="false" aria-controls="panel-console" type="button">Console</button>
+        <span class="spacer" style="margin-left:auto"></span>
+        <button class="ghost" id="only-failing" type="button" aria-pressed="false">failing only</button>
+        <button class="ghost" id="skip-scale" type="button" aria-pressed="false">skip scale</button>
+      </nav>
+      <div class="tab-body">
+        <div class="panel on" id="panel-spec" role="tabpanel" aria-labelledby="tab-spec">
+          <div class="spec">
+            <h2>Problem</h2>
+            <p>
+              Design a system that manages GPU credits. Each credit grant has a unique id and is valid
+              during a specific time window. Grants may overlap in time.
+            </p>
+            <p>
+              Because of network delays, events may arrive and be processed out of order with respect to
+              their timestamp. At any point you may be asked for the total available credits at a given
+              timestamp, or asked to consume credits at a given time.
+            </p>
+
+            <h2>Interface</h2>
+            <div class="sig">
+              <div>
+                <code>CreditSystem()</code>
+                <span>Initializes the credit system.</span>
+              </div>
+              <div>
+                <code>addGrant(grantId, amount, startTime, endTime)</code>
+                <span>Registers a grant of <code>amount</code> credits valid on <code>[startTime, endTime)</code>. Returns nothing.</span>
+              </div>
+              <div>
+                <code>getAvailableCredits(timestamp)</code>
+                <span>Returns the total credits available at <code>timestamp</code>.</span>
+              </div>
+              <div>
+                <code>consumeCredits(timestamp, amount)</code>
+                <span>Attempts to consume <code>amount</code> credits at <code>timestamp</code>. Returns a boolean.</span>
+              </div>
+            </div>
+
+            <h2>Rules</h2>
+            <ul>
+              <li>A grant is active at <code>t</code> when <code>startTime &lt;= t &lt; endTime</code>.</li>
+              <li>Calls may arrive in any order relative to their timestamps. Every answer must reflect all
+                  events accepted so far, replayed in timestamp order. Two events with the same timestamp
+                  replay in arrival order.</li>
+              <li><code>getAvailableCredits(t)</code> is the unconsumed total of the grants active at
+                  <code>t</code>, counting only consumptions whose timestamp is <code>&lt;= t</code>.</li>
+              <li>A consumption draws from the active grants in order of soonest expiry first; ties break on
+                  the smaller <code>grantId</code>.</li>
+              <li>A consumption is accepted only if, after the replay, it and every previously accepted
+                  consumption are still fully satisfied. Otherwise it returns <code>false</code>, changes
+                  nothing, and is discarded — it is never retried.</li>
+              <li>Once accepted, a consumption is never revoked.</li>
+              <li>Consuming <code>0</code> always succeeds. Grant ids are unique, amounts are non-negative
+                  integers, timestamps are integers and may be negative.</li>
+            </ul>
+
+            <h2>Working here</h2>
+            <ul>
+              <li>Write plain JavaScript. Your file must define a top-level <code>class CreditSystem</code>.</li>
+              <li><code>⌘/Ctrl + Enter</code> runs the suite. Your code autosaves to this browser.</li>
+              <li>The scale case has a 5s budget; correctness is graded separately from speed.</li>
+              <li>An infinite loop freezes the tab — reload, your code is saved.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-results" role="tabpanel" aria-labelledby="tab-results">
+          <div class="empty">No run yet. Press Run tests.</div>
+        </div>
+
+        <div class="panel" id="panel-console" role="tabpanel" aria-labelledby="tab-console">
+          <div class="empty">console.log output from your last run appears here.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="tests.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var STUB = [
+    "class CreditSystem {",
+    "  constructor() {",
+    "    // your state here",
+    "  }",
+    "",
+    "  /**",
+    "   * @param {string} grantId  unique id of the grant",
+    "   * @param {number} amount   credits granted",
+    "   * @param {number} startTime  inclusive",
+    "   * @param {number} endTime    exclusive",
+    "   * @returns {void}",
+    "   */",
+    "  addGrant(grantId, amount, startTime, endTime) {",
+    "    // TODO",
+    "  }",
+    "",
+    "  /**",
+    "   * @param {number} timestamp",
+    "   * @returns {number} credits available at timestamp",
+    "   */",
+    "  getAvailableCredits(timestamp) {",
+    "    // TODO",
+    "    return 0;",
+    "  }",
+    "",
+    "  /**",
+    "   * @param {number} timestamp",
+    "   * @param {number} amount",
+    "   * @returns {boolean} whether the consumption was accepted",
+    "   */",
+    "  consumeCredits(timestamp, amount) {",
+    "    // TODO",
+    "    return false;",
+    "  }",
+    "}",
+    ""
+  ].join("\n");
+
+  var STORE_CODE = "gpu-credit-bench:code";
+  var STORE_CLOCK = "gpu-credit-bench:clock";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var code = $("code");
+  var gutter = $("gutter");
+  var savedFlag = $("saved");
+  var meter = $("meter");
+  var tally = $("tally");
+  var tabCount = $("tab-count");
+  var results = $("panel-results");
+  var consolePanel = $("panel-console");
+
+  /* ---------- editor ---------- */
+  function load() {
+    var stored = null;
+    try { stored = localStorage.getItem(STORE_CODE); } catch (e) {}
+    code.value = stored != null && stored !== "" ? stored : STUB;
+    syncGutter();
+  }
+
+  function syncGutter() {
+    var lines = code.value.split("\n").length;
+    var out = [];
+    for (var i = 1; i <= lines; i++) out.push(i);
+    gutter.textContent = out.join("\n");
+    gutter.scrollTop = code.scrollTop;
+  }
+
+  var saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(STORE_CODE, code.value); } catch (e) {}
+      savedFlag.classList.add("on");
+      setTimeout(function () { savedFlag.classList.remove("on"); }, 900);
+    }, 400);
+  }
+
+  code.addEventListener("input", function () {
+    syncGutter();
+    scheduleSave();
+    if (!clock.running && clock.elapsed === 0) startClock();
+  });
+  code.addEventListener("scroll", function () { gutter.scrollTop = code.scrollTop; });
+
+  code.addEventListener("keydown", function (e) {
+    var start = code.selectionStart;
+    var end = code.selectionEnd;
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      var value = code.value;
+      if (start !== end && value.slice(start, end).indexOf("\n") !== -1) {
+        var from = value.lastIndexOf("\n", start - 1) + 1;
+        var block = value.slice(from, end);
+        var shifted = e.shiftKey
+          ? block.replace(/^ {1,2}/gm, "")
+          : block.replace(/^/gm, "  ");
+        code.value = value.slice(0, from) + shifted + value.slice(end);
+        code.selectionStart = from;
+        code.selectionEnd = from + shifted.length;
+      } else if (e.shiftKey) {
+        var lineStart = value.lastIndexOf("\n", start - 1) + 1;
+        if (value.slice(lineStart, lineStart + 2) === "  ") {
+          code.value = value.slice(0, lineStart) + value.slice(lineStart + 2);
+          code.selectionStart = code.selectionEnd = Math.max(lineStart, start - 2);
+        }
+      } else {
+        code.value = value.slice(0, start) + "  " + value.slice(end);
+        code.selectionStart = code.selectionEnd = start + 2;
+      }
+      syncGutter();
+      scheduleSave();
+      return;
+    }
+
+    if (e.key === "Enter") {
+      var val = code.value;
+      var lineFrom = val.lastIndexOf("\n", start - 1) + 1;
+      var line = val.slice(lineFrom, start);
+      var indent = (line.match(/^\s*/) || [""])[0];
+      if (/[{([]\s*$/.test(line)) indent += "  ";
+      if (indent) {
+        e.preventDefault();
+        var insert = "\n" + indent;
+        code.value = val.slice(0, start) + insert + val.slice(end);
+        code.selectionStart = code.selectionEnd = start + insert.length;
+        syncGutter();
+        scheduleSave();
+      }
+      return;
+    }
+
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      run();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      scheduleSave();
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      run();
+    }
+  });
+
+  $("reset-code").addEventListener("click", function () {
+    if (!confirm("Replace the editor contents with the empty stub?")) return;
+    code.value = STUB;
+    syncGutter();
+    scheduleSave();
+    code.focus();
+  });
+
+  /* ---------- clock ---------- */
+  var clock = { running: false, elapsed: 0, since: 0 };
+  var TARGET = 45 * 60 * 1000;
+
+  try {
+    var raw = localStorage.getItem(STORE_CLOCK);
+    if (raw) clock.elapsed = JSON.parse(raw).elapsed || 0;
+  } catch (e) {}
+
+  function fmt(ms) {
+    var total = Math.floor(ms / 1000);
+    var m = Math.floor(total / 60);
+    var s = total % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function tick() {
+    var ms = clock.elapsed + (clock.running ? Date.now() - clock.since : 0);
+    $("elapsed").textContent = fmt(ms);
+    $("clock").classList.toggle("over", ms > TARGET);
+  }
+
+  function startClock() {
+    clock.running = true;
+    clock.since = Date.now();
+    $("clock-toggle").textContent = "pause";
+  }
+
+  function stopClock() {
+    clock.elapsed += Date.now() - clock.since;
+    clock.running = false;
+    $("clock-toggle").textContent = "start";
+    try { localStorage.setItem(STORE_CLOCK, JSON.stringify({ elapsed: clock.elapsed })); } catch (e) {}
+  }
+
+  $("clock-toggle").addEventListener("click", function () {
+    if (clock.running) stopClock(); else startClock();
+    tick();
+  });
+
+  $("clock-reset").addEventListener("click", function () {
+    clock.running = false;
+    clock.elapsed = 0;
+    $("clock-toggle").textContent = "start";
+    try { localStorage.removeItem(STORE_CLOCK); } catch (e) {}
+    tick();
+  });
+
+  setInterval(function () {
+    tick();
+    if (clock.running) {
+      try { localStorage.setItem(STORE_CLOCK, JSON.stringify({ elapsed: clock.elapsed + (Date.now() - clock.since) })); } catch (e) {}
+    }
+  }, 1000);
+
+  /* ---------- tabs ---------- */
+  var tabs = [
+    { tab: $("tab-spec"), panel: $("panel-spec") },
+    { tab: $("tab-results"), panel: $("panel-results") },
+    { tab: $("tab-console"), panel: $("panel-console") }
+  ];
+  tabs.forEach(function (entry) {
+    entry.tab.addEventListener("click", function () { select(entry); });
+  });
+  function select(target) {
+    tabs.forEach(function (entry) {
+      var on = entry === target;
+      entry.tab.setAttribute("aria-selected", on ? "true" : "false");
+      entry.panel.classList.toggle("on", on);
+    });
+  }
+
+  var onlyFailing = false;
+  var skipScale = false;
+  var lastRun = null;
+
+  $("only-failing").addEventListener("click", function () {
+    onlyFailing = !onlyFailing;
+    this.setAttribute("aria-pressed", onlyFailing ? "true" : "false");
+    if (lastRun) render(lastRun);
+  });
+
+  $("skip-scale").addEventListener("click", function () {
+    skipScale = !skipScale;
+    this.setAttribute("aria-pressed", skipScale ? "true" : "false");
+  });
+
+  /* ---------- runner ---------- */
+  function AssertionError(label, actual, expected) {
+    var err = new Error(label + "\n  expected: " + show(expected) + "\n  actual:   " + show(actual));
+    err.name = "AssertionError";
+    return err;
+  }
+
+  function show(v) {
+    if (typeof v === "string") return JSON.stringify(v);
+    if (typeof v === "number" && !isFinite(v)) return String(v);
+    return String(v);
+  }
+
+  function harness(CreditSystem) {
+    return {
+      CreditSystem: CreditSystem,
+      eq: function (actual, expected, label) {
+        if (actual !== expected) throw AssertionError(label, actual, expected);
+      },
+      ok: function (actual, label) {
+        if (actual !== true) throw AssertionError(label, actual, true);
+      },
+      no: function (actual, label) {
+        if (actual !== false) throw AssertionError(label, actual, false);
+      }
+    };
+  }
+
+  function run() {
+    var CreditSystem;
+    try {
+      CreditSystem = new Function(code.value + '\n;return typeof CreditSystem !== "undefined" ? CreditSystem : null;')();
+    } catch (err) {
+      lastRun = null;
+      showCrash("Your code did not load.\n\n" + (err && err.message ? err.message : String(err)));
+      return;
+    }
+    if (typeof CreditSystem !== "function") {
+      lastRun = null;
+      showCrash("No class named CreditSystem was found in your file.");
+      return;
+    }
+
+    var logs = [];
+    var realLog = console.log;
+    console.log = function () {
+      var parts = [];
+      for (var i = 0; i < arguments.length; i++) {
+        var a = arguments[i];
+        parts.push(typeof a === "object" && a !== null ? safeJson(a) : String(a));
+      }
+      logs.push(parts.join(" "));
+      realLog.apply(console, arguments);
+    };
+
+    var run_ = { suites: [], passed: 0, failed: 0, logs: logs };
+    try {
+      (globalThis.CREDIT_TEST_SUITES || []).forEach(function (suite) {
+        if (suite.optional && skipScale) return;
+        var entry = { name: suite.name, why: suite.why, cases: [] };
+        suite.cases.forEach(function (testCase) {
+          var started = performance.now();
+          var error = null;
+          try {
+            testCase.run(harness(CreditSystem));
+          } catch (err) {
+            error = err;
+          }
+          var ms = performance.now() - started;
+          if (!error && testCase.budgetMs && ms > testCase.budgetMs) {
+            error = new Error("over budget\n  budget:   " + testCase.budgetMs + "ms\n  actual:   " + Math.round(ms) + "ms");
+          }
+          if (error) run_.failed++; else run_.passed++;
+          entry.cases.push({
+            name: testCase.name,
+            ms: ms,
+            timed: !!testCase.budgetMs,
+            error: error ? (error.message || String(error)) : null,
+            source: testCase.run.toString()
+          });
+        });
+        run_.suites.push(entry);
+      });
+    } finally {
+      console.log = realLog;
+    }
+
+    lastRun = run_;
+    render(run_);
+    select(tabs[1]);
+  }
+
+  function safeJson(value) {
+    try { return JSON.stringify(value); } catch (e) { return String(value); }
+  }
+
+  function showCrash(message) {
+    results.innerHTML = "";
+    var box = document.createElement("div");
+    box.className = "crash";
+    box.textContent = message;
+    results.appendChild(box);
+    meter.classList.add("has-fail");
+    meter.firstElementChild.style.width = "100%";
+    tally.innerHTML = '<span class="bad">error</span>';
+    tabCount.textContent = "";
+    select(tabs[1]);
+  }
+
+  function render(run_) {
+    var total = run_.passed + run_.failed;
+    meter.classList.toggle("has-fail", run_.failed > 0);
+    meter.firstElementChild.style.width = total ? (run_.passed / total) * 100 + "%" : "0%";
+    tally.innerHTML = run_.failed
+      ? '<b>' + run_.passed + "/" + total + "</b> passing · <span class=\"bad\">" + run_.failed + " failing</span>"
+      : '<b>' + run_.passed + "/" + total + "</b> passing";
+    tabCount.textContent = run_.failed ? "· " + run_.failed + " ✕" : "· " + total + " ✓";
+
+    results.innerHTML = "";
+    var shown = 0;
+
+    run_.suites.forEach(function (suite) {
+      var cases = onlyFailing ? suite.cases.filter(function (c) { return c.error; }) : suite.cases;
+      if (!cases.length) return;
+      shown += cases.length;
+
+      var wrap = document.createElement("div");
+      wrap.className = "suite";
+
+      var head = document.createElement("div");
+      head.className = "suite-head";
+      var h3 = document.createElement("h3");
+      h3.textContent = suite.name;
+      var why = document.createElement("span");
+      why.className = "why";
+      why.textContent = suite.why;
+      var n = document.createElement("span");
+      n.className = "n";
+      var pass = suite.cases.filter(function (c) { return !c.error; }).length;
+      n.textContent = pass + "/" + suite.cases.length;
+      head.appendChild(h3);
+      head.appendChild(why);
+      head.appendChild(n);
+      wrap.appendChild(head);
+
+      cases.forEach(function (c) {
+        var row = document.createElement("div");
+        row.className = "case" + (c.error ? " fail" : "");
+
+        var pill = document.createElement("span");
+        pill.className = "pill " + (c.error ? "fail" : "pass");
+        pill.textContent = c.error ? "FAIL" : "PASS";
+
+        var name = document.createElement("span");
+        name.className = "name";
+        name.textContent = c.name;
+
+        var ms = document.createElement("span");
+        ms.className = "ms";
+        ms.textContent = c.timed || c.ms > 20 ? Math.round(c.ms) + "ms" : "";
+
+        row.appendChild(pill);
+        row.appendChild(name);
+        row.appendChild(ms);
+
+        if (c.error) {
+          var detail = document.createElement("div");
+          detail.className = "why-fail";
+          detail.textContent = c.error;
+          row.appendChild(detail);
+        }
+
+        var toggle = document.createElement("button");
+        toggle.className = "toggle";
+        toggle.type = "button";
+        toggle.textContent = "show test";
+        var src = null;
+        toggle.addEventListener("click", function () {
+          if (src) {
+            src.remove();
+            src = null;
+            toggle.textContent = "show test";
+            return;
+          }
+          src = document.createElement("pre");
+          src.className = "case-src";
+          src.textContent = dedent(c.source);
+          row.appendChild(src);
+          toggle.textContent = "hide test";
+        });
+        row.appendChild(toggle);
+
+        wrap.appendChild(row);
+      });
+
+      results.appendChild(wrap);
+    });
+
+    if (!shown) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = onlyFailing ? "Nothing failing." : "No cases ran.";
+      results.appendChild(empty);
+    }
+
+    consolePanel.innerHTML = "";
+    if (run_.logs.length) {
+      var pre = document.createElement("pre");
+      pre.className = "console-out";
+      pre.textContent = run_.logs.join("\n");
+      consolePanel.appendChild(pre);
+    } else {
+      var none = document.createElement("div");
+      none.className = "empty";
+      none.textContent = "Nothing logged in the last run.";
+      consolePanel.appendChild(none);
+    }
+  }
+
+  function dedent(source) {
+    var lines = source.replace(/\t/g, "  ").split("\n");
+    var min = Infinity;
+    lines.slice(1).forEach(function (line) {
+      if (!line.trim()) return;
+      min = Math.min(min, (line.match(/^ */) || [""])[0].length);
+    });
+    if (!isFinite(min) || min === 0) return source;
+    return lines
+      .map(function (line, i) { return i === 0 ? line : line.slice(min); })
+      .join("\n");
+  }
+
+  $("run").addEventListener("click", run);
+
+  load();
+  tick();
+})();
+</script>
+<!-- ARTIFACT:END -->
+</body>
+</html>
